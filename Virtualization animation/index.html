@@ -1,0 +1,2173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Virtualization · An Interactive Lecture</title>
+<meta name="description" content="A formal, self-contained 3D lecture on operating-system virtualization: concept, VM creation, hypervisor types, network and service virtualization, and cost. No network required.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,600;0,8..60,700;1,8..60,400&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f4efe3; --card:#fbf8f1; --card2:#ffffff;
+  --ink:#1b1f28; --body:#3c4354; --muted:#6d7484;
+  --oxford:#1f3a5f; --brass:#9a7420; --brass-soft:#c9a227;
+  --line:#ddd3bd; --hair:rgba(27,31,40,.12);
+  --acc:#2f5d8a;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; color:var(--ink);
+  font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:
+    radial-gradient(1100px 600px at 10% -10%, rgba(31,58,95,.07), transparent 60%),
+    radial-gradient(900px 600px at 100% 15%, rgba(154,116,32,.08), transparent 55%),
+    linear-gradient(180deg,#f7f3e8,var(--paper) 70%);
+  overflow:hidden;
+}
+::selection{background:rgba(201,162,39,.35)}
+
+/* ---------- top bar ---------- */
+.topbar{
+  position:fixed;top:0;left:0;right:0;height:68px;z-index:50;
+  display:flex;align-items:center;gap:18px;padding:0 22px;
+  background:rgba(250,247,240,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:center;gap:13px;min-width:0}
+.mark{
+  width:38px;height:38px;flex:0 0 38px;display:grid;place-items:center;
+  font-family:"Source Serif 4",Georgia,serif;font-size:22px;font-weight:700;color:#f7f3e8;
+  background:var(--oxford);border-radius:7px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);
+}
+.brand h1{font-family:"Source Serif 4",Georgia,serif;font-size:18px;margin:0;font-weight:700;letter-spacing:.2px;white-space:nowrap}
+.brand h1 span{color:var(--brass)}
+.brand small{display:block;font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:2.4px;color:var(--muted);margin-top:1px}
+.chapters{display:flex;gap:4px;margin-left:auto;overflow-x:auto;scrollbar-width:none}
+.chapters::-webkit-scrollbar{display:none}
+.tab{
+  font-family:Inter,sans-serif;font-size:12.5px;font-weight:600;letter-spacing:.2px;
+  color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;
+  padding:10px 12px 8px;cursor:pointer;white-space:nowrap;transition:all .2s;
+}
+.tab b{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--brass);margin-right:7px;font-weight:600}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--ink);border-bottom-color:var(--brass)}
+.actions{display:flex;gap:8px}
+.abtn{
+  min-width:38px;height:38px;border-radius:8px;display:grid;place-items:center;cursor:pointer;
+  color:var(--ink);background:#fff;border:1px solid var(--hair);
+  font-size:15px;transition:all .2s;padding:0 8px;
+  font-family:"IBM Plex Mono",monospace;font-weight:600;
+}
+.abtn:hover{border-color:var(--brass)}
+.abtn.on{background:var(--oxford);color:#f7f3e8;border-color:var(--oxford)}
+.progress{position:fixed;top:68px;left:0;right:0;height:3px;background:rgba(27,31,40,.08);z-index:50}
+.progress i{display:block;height:100%;width:0;background:var(--brass-soft);transition:width .3s}
+
+/* ---------- stage ---------- */
+.stage{position:fixed;top:71px;left:0;right:0;bottom:0;display:grid;grid-template-columns:minmax(0,1fr) 450px;z-index:1}
+.viewport{position:relative;overflow:hidden;background:var(--paper)}
+#gl{position:absolute;inset:0}
+#gl canvas{display:block}
+.vignette{position:absolute;inset:0;pointer-events:none;background:radial-gradient(115% 90% at 50% 42%,transparent 60%,rgba(31,42,66,.10) 100%)}
+.hud-chip{
+  position:absolute;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:1.6px;
+  padding:10px 15px;border-radius:8px;color:var(--ink);
+  background:rgba(255,255,255,.88);border:1px solid var(--line);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:0 4px 18px rgba(31,42,66,.08);
+}
+.chap-pill{top:16px;left:16px;border-left:3px solid var(--acc)}
+.chap-pill b{color:var(--acc)}
+.live{top:16px;right:16px;display:flex;align-items:center;gap:9px}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--brass-soft);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.state-chip{left:16px;bottom:16px;right:86px;letter-spacing:.3px;line-height:1.55;border-left:3px solid var(--brass);font-family:Inter,sans-serif;font-size:13.5px}
+.state-chip small{display:block;font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:2.2px;color:var(--brass);margin-bottom:4px}
+.drag-hint{right:16px;bottom:16px;font-size:9.5px;color:var(--muted);letter-spacing:1.4px;transition:opacity .6s}
+.float-nav{
+  position:absolute;top:50%;transform:translateY(-50%);z-index:5;
+  width:44px;height:62px;border-radius:9px;cursor:pointer;font-size:22px;color:var(--ink);
+  background:rgba(255,255,255,.9);border:1px solid var(--line);transition:all .2s;
+  box-shadow:0 4px 16px rgba(31,42,66,.10);
+}
+.float-nav:hover{border-color:var(--brass)}
+.float-nav.prev{left:14px}.float-nav.next{right:14px}
+.float-nav:disabled{opacity:.25;cursor:default}
+.webgl-fallback{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:40px}
+.webgl-fallback.show{display:grid}
+.webgl-fallback .card{max-width:440px;background:#fff;border:1px solid var(--line);border-top:3px solid var(--brass);border-radius:10px;padding:36px;box-shadow:0 12px 40px rgba(31,42,66,.10)}
+.webgl-fallback .sec{font-family:"Source Serif 4",serif;font-size:40px;color:var(--brass)}
+.webgl-fallback h3{font-family:"Source Serif 4",serif;margin:10px 0 8px;font-size:21px}
+.webgl-fallback p{color:var(--body);font-size:14px;line-height:1.75;margin:0}
+
+/* ---------- reading panel ---------- */
+.panel{
+  background:var(--card);border-left:1px solid var(--line);
+  padding:28px 30px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:13px;
+}
+.panel::-webkit-scrollbar{width:8px}
+.panel::-webkit-scrollbar-thumb{background:#cfc4a4;border-radius:8px}
+.ch-meta{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.kicker{font-family:"IBM Plex Mono",monospace;font-size:10.5px;font-weight:600;letter-spacing:1.8px;color:var(--acc)}
+.stepof{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:1.2px;color:var(--muted);border:1px solid var(--hair);padding:5px 11px;border-radius:999px;white-space:nowrap;background:#fff}
+#stTitle{font-family:"Source Serif 4",Georgia,serif;font-size:30px;line-height:1.22;margin:2px 0 0;font-weight:700}
+#stTitle .n{color:var(--brass);font-weight:600}
+.rule{height:1px;background:var(--line);margin:2px 0}
+#stBody{font-size:15.5px;line-height:1.8;color:var(--body);margin:0}
+#stBullets{margin:2px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+#stBullets li{position:relative;font-size:14px;line-height:1.65;color:var(--body);padding-left:24px}
+#stBullets li::before{content:"";position:absolute;left:2px;top:8px;width:7px;height:7px;background:var(--brass-soft)}
+.spacer{flex:1;min-height:6px}
+.step-row{display:flex;align-items:center;gap:12px}
+.btn{
+  flex:1;font-family:Inter,sans-serif;font-weight:600;font-size:13.5px;letter-spacing:.3px;
+  padding:13px 10px;border-radius:8px;cursor:pointer;transition:all .2s;color:var(--ink);
+  background:#fff;border:1px solid rgba(27,31,40,.25);
+}
+.btn:hover:not(:disabled){border-color:var(--oxford)}
+.btn:disabled{opacity:.3;cursor:default}
+.btn.primary{background:var(--oxford);color:#f7f3e8;border:1px solid var(--oxford)}
+.btn.primary:hover{filter:brightness(1.12)}
+#counter{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);white-space:nowrap}
+.dots{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.dot{width:10px;height:10px;border-radius:50%;border:1px solid #b7ad94;background:#fff;cursor:pointer;padding:0;transition:all .2s}
+.dot:hover{border-color:var(--brass);transform:scale(1.25)}
+.dot.on{background:var(--brass);border-color:var(--brass);transform:scale(1.2)}
+.dot.done{background:#d9c98f;border-color:#c9b878}
+.sep{width:8px}
+.scrub{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px 14px}
+.scrub-top{display:flex;justify-content:space-between;font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:1.8px;color:var(--muted);margin-bottom:9px}
+.scrub-top span:last-child{color:var(--brass)}
+input[type=range]{width:100%;appearance:none;-webkit-appearance:none;height:5px;border-radius:5px;background:var(--oxford);outline:none;cursor:ew-resize}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:19px;height:19px;border-radius:50%;background:var(--brass-soft);border:2px solid #fff;box-shadow:0 0 0 1px var(--brass),0 2px 8px rgba(31,42,66,.25);cursor:grab}
+input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--brass-soft);border:2px solid #fff;box-shadow:0 0 0 1px var(--brass);cursor:grab}
+.keys-hint{text-align:center;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:1.1px;color:var(--muted)}
+.keys-hint b{color:var(--oxford)}
+.diag-link{cursor:pointer;text-decoration:underline dotted}
+.diag{position:absolute;top:60px;right:16px;z-index:6;max-width:320px;text-align:left;
+  font-family:"IBM Plex Mono",monospace;font-size:10px;line-height:1.7;white-space:pre-wrap;
+  background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+  box-shadow:0 8px 28px rgba(31,42,66,.15)}
+.enter{animation:enter .4s ease}
+@keyframes enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.enter.up{animation-name:enterUp}
+@keyframes enterUp{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+
+/* ---------- help modal ---------- */
+.modal{position:fixed;inset:0;z-index:100;display:none;place-items:center;background:rgba(27,31,40,.45)}
+.modal.show{display:grid}
+.sheet{width:min(560px,92vw);max-height:86vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-top:3px solid var(--brass);border-radius:12px;padding:30px 32px;box-shadow:0 30px 80px rgba(27,31,40,.3)}
+.sheet h2{font-family:"Source Serif 4",serif;margin:0 0 4px;font-size:24px}
+.sheet p.sub{color:var(--body);font-size:13.5px;margin:0 0 14px;line-height:1.7}
+.krow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--hair);font-size:13.5px;color:var(--body)}
+kbd{font-family:"IBM Plex Mono",monospace;font-size:10.5px;background:#fff;border:1px solid rgba(27,31,40,.25);border-bottom-width:2px;border-radius:6px;padding:4px 9px;margin-left:4px;white-space:nowrap}
+.sheet .btn{margin-top:18px;width:100%}
+.lec-note{display:none;margin-top:10px;font-size:11.5px;color:var(--brass);font-family:"IBM Plex Mono",monospace;letter-spacing:.4px}
+
+/* ---------- responsive ---------- */
+@media (max-width:1020px){
+  .brand small{display:none}
+  .brand h1{font-size:15px}
+  .stage{grid-template-columns:1fr;grid-template-rows:42vh 1fr}
+  .panel{border-left:none;border-top:1px solid var(--line);padding:18px 18px 16px}
+  #stTitle{font-size:23px}
+  .tab{padding:8px 9px}
+  .tab .tl{display:none}
+  .float-nav{display:none}
+  .state-chip{right:16px;font-size:12.5px}
+  .drag-hint{display:none}
+}
+:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+</style>
+</head>
+<body>
+<noscript><div style="padding:40px;font-family:sans-serif">This interactive lecture requires JavaScript.</div></noscript>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="mark">V</div>
+    <h1>Virtualization <span>· An Interactive Lecture</span><small>OPERATING SYSTEMS · TEACHING SERIES</small></h1>
+  </div>
+  <nav class="chapters" id="tabs" aria-label="Chapters"></nav>
+  <div class="actions">
+    <button class="abtn" id="lecBtn" title="Lecture mode: auto-advance (L)">&#9654;</button>
+    <button class="abtn" id="fsBtn" title="Fullscreen (F)">&#9974;</button>
+    <button class="abtn" id="helpBtn" title="Controls and help (?)">?</button>
+  </div>
+</header>
+<div class="progress"><i id="pfill"></i></div>
+
+<main class="stage">
+  <section class="viewport" id="viewport" aria-label="Three-dimensional figure">
+    <div id="gl"></div>
+    <div class="vignette"></div>
+    <div class="hud-chip chap-pill" id="chapPill"><b>CH 1/5</b> &middot; WHAT IS VIRTUALIZATION?</div>
+    <div class="hud-chip live"><i></i>FIGURE &middot; 3D</div>
+    <div class="hud-chip state-chip" id="stateChip"><small id="stateK">FIGURE &middot; STATE 1/4</small><span id="stateCap"></span></div>
+    <div class="hud-chip drag-hint" id="dragHint">DRAG TO ROTATE &middot; SCROLL FOR STEPS &middot; DOUBLE-CLICK RESETS</div>
+    <div class="diag" id="diag" style="display:none"></div>
+    <button class="float-nav prev" id="fPrev" title="Previous state">&#8249;</button>
+    <button class="float-nav next" id="fNext" title="Next state">&#8250;</button>
+    <div class="webgl-fallback" id="glFallback">
+      <div class="card">
+        <div class="sec">&sect;</div>
+        <h3>Figure unavailable</h3>
+        <p>This browser could not initialise WebGL, so the illustration is withheld. The complete lesson text and all navigation remain fully available.</p>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel" id="panel" aria-label="Lesson text">
+    <div id="swap">
+      <div class="ch-meta"><span class="kicker" id="kicker"></span><span class="stepof" id="stepof"></span></div>
+      <h2 id="stTitle"></h2>
+      <div class="rule"></div>
+      <p id="stBody"></p>
+      <ul id="stBullets"></ul>
+    </div>
+    <div class="spacer"></div>
+    <div class="step-row">
+      <button class="btn" id="prevBtn">&larr; Previous</button>
+      <span id="counter"></span>
+      <button class="btn primary" id="nextBtn">Next &rarr;</button>
+    </div>
+    <div class="dots" id="dots"></div>
+    <div class="scrub">
+      <div class="scrub-top"><span>SCRUB THE FIGURE</span><span>FULLY REVERSIBLE</span></div>
+      <input type="range" id="scrub" min="0" max="19" step="0.01" value="0" aria-label="Scrub 3D figure state">
+    </div>
+    <div class="keys-hint" id="keysHint"><b>SCROLL</b> &middot; <b>ARROW KEYS</b> &middot; <b>SPACE</b> &mdash; EVERY STEP REVERSIBLE &middot; <span class="diag-link" id="diagLink" title="Toggle diagnostics (D)">DIAG</span></div>
+    <div class="lec-note" id="lecNote">LECTURE MODE &mdash; ADVANCING EVERY 7 SECONDS &middot; PRESS L TO STOP</div>
+  </aside>
+</main>
+
+<div class="modal" id="helpModal">
+  <div class="sheet">
+    <h2>Presenter controls</h2>
+    <p class="sub">Advance the figure forward <b>and</b> backward &mdash; every control is fully reversible, so any moment may be replayed for the class.</p>
+    <div class="krow"><span>Next state / previous state</span><span><kbd>&darr;</kbd><kbd>&rarr;</kbd><kbd>Space</kbd> / <kbd>&uarr;</kbd><kbd>&larr;</kbd></span></div>
+    <div class="krow"><span>Mouse / trackpad scroll</span><span><kbd>scroll &darr;</kbd> next &middot; <kbd>scroll &uarr;</kbd> back</span></div>
+    <div class="krow"><span>Scrub the figure continuously</span><span>drag the timeline slider</span></div>
+    <div class="krow"><span>Rotate the figure (full 360&deg;)</span><span>drag with mouse or touch &middot; double-click resets</span></div>
+    <div class="krow"><span>Touch gestures</span><span>drag rotates &middot; fast flick changes step</span></div>
+    <div class="krow"><span>Jump to beginning / end</span><span><kbd>Home</kbd> <kbd>End</kbd></span></div>
+    <div class="krow"><span>Lecture auto-play</span><span><kbd>L</kbd></span></div>
+    <div class="krow"><span>Fullscreen</span><span><kbd>F</kbd></span></div>
+    <div class="krow"><span>This panel</span><span><kbd>?</kbd> or <kbd>Esc</kbd></span></div>
+    <button class="btn primary" id="helpClose">Return to the lecture</button>
+  </div>
+</div>
+
+<script id="minigl">
+"use strict";
+/* ============================================================
+   MiniGL — a compact, dependency-free WebGL renderer implementing
+   the subset of the three.js API used by this lecture. No CDN,
+   no network: the 3D figure renders fully offline.
+   ============================================================ */
+const THREE = (function(){
+function hexRGB(h){ return [((h>>16)&255)/255, ((h>>8)&255)/255, (h&255)/255]; }
+const FrontSide=0, BackSide=1, DoubleSide=2;
+const NormalBlending=1, AdditiveBlending=2;
+const sRGBEncoding=3001;
+
+class Vector3{
+  constructor(x,y,z){ this.x=x||0; this.y=y||0; this.z=z||0; }
+  set(x,y,z){ this.x=x; this.y=y; this.z=z; return this; }
+  copy(v){ this.x=v.x; this.y=v.y; this.z=v.z; return this; }
+  clone(){ return new Vector3(this.x,this.y,this.z); }
+  add(v){ this.x+=v.x; this.y+=v.y; this.z+=v.z; return this; }
+  sub(v){ this.x-=v.x; this.y-=v.y; this.z-=v.z; return this; }
+  subVectors(a,b){ this.x=a.x-b.x; this.y=a.y-b.y; this.z=a.z-b.z; return this; }
+  crossVectors(a,b){
+    const x=a.y*b.z-a.z*b.y, y=a.z*b.x-a.x*b.z, z=a.x*b.y-a.y*b.x;
+    this.x=x; this.y=y; this.z=z; return this;
+  }
+  multiplyScalar(s){ this.x*=s; this.y*=s; this.z*=s; return this; }
+  addScaledVector(v,s){ this.x+=v.x*s; this.y+=v.y*s; this.z+=v.z*s; return this; }
+  length(){ return Math.sqrt(this.x*this.x+this.y*this.y+this.z*this.z); }
+  normalize(){ const l=this.length()||1; return this.multiplyScalar(1/l); }
+  lerpVectors(a,b,t){ this.x=a.x+(b.x-a.x)*t; this.y=a.y+(b.y-a.y)*t; this.z=a.z+(b.z-a.z)*t; return this; }
+  lerp(v,t){ this.x+=(v.x-this.x)*t; this.y+=(v.y-this.y)*t; this.z+=(v.z-this.z)*t; return this; }
+  setScalar(s){ this.x=s; this.y=s; this.z=s; return this; }
+  applyMatrix4(m){ const e=m.elements,x=this.x,y=this.y,z=this.z;
+    const w=(e[3]*x+e[7]*y+e[11]*z+e[15])||1;
+    this.x=(e[0]*x+e[4]*y+e[8]*z+e[12])/w; this.y=(e[1]*x+e[5]*y+e[9]*z+e[13])/w; this.z=(e[2]*x+e[6]*y+e[10]*z+e[14])/w;
+    return this; }
+  distanceTo(v){ const dx=this.x-v.x,dy=this.y-v.y,dz=this.z-v.z; return Math.sqrt(dx*dx+dy*dy+dz*dz); }
+}
+class Color{
+  constructor(hex){ this.r=1; this.g=1; this.b=1; if(hex!==undefined) this.setHex(hex); }
+  setHex(hex){ const c=hexRGB(hex); this.r=c[0]; this.g=c[1]; this.b=c[2]; return this; }
+  copy(c){ this.r=c.r; this.g=c.g; this.b=c.b; return this; }
+}
+class Euler{
+  constructor(x,y,z){ this._x=x||0; this._y=y||0; this._z=z||0; this._cb=null; }
+  get x(){ return this._x; } set x(v){ this._x=v; if(this._cb) this._cb(); }
+  get y(){ return this._y; } set y(v){ this._y=v; if(this._cb) this._cb(); }
+  get z(){ return this._z; } set z(v){ this._z=v; if(this._cb) this._cb(); }
+  set(x,y,z){ this._x=x; this._y=y; this._z=z; if(this._cb) this._cb(); return this; }
+  copy(e){ return this.set(e.x,e.y,e.z); }
+  setFromQuaternion(q){
+    const x=q.x,y=q.y,z=q.z,w=q.w;
+    const m13=2*(x*z+y*w);
+    this._y=Math.asin(Math.max(-1,Math.min(1,m13)));
+    if(Math.abs(m13)<0.9999999){
+      this._x=Math.atan2(-(2*(y*z-x*w)),1-2*(x*x+y*y));
+      this._z=Math.atan2(-(2*(x*y-z*w)),1-2*(y*y+z*z));
+    }else{ this._x=Math.atan2(2*(y*z+x*w),1-2*(x*x+z*z)); this._z=0; }
+    if(this._cb) this._cb(); return this;
+  }
+}
+class Quaternion{
+  constructor(x,y,z,w){ this._x=x||0; this._y=y||0; this._z=z||0; this._w=(w===undefined?1:w); this._cb=null; }
+  get x(){ return this._x; } set x(v){ this._x=v; }
+  get y(){ return this._y; } set y(v){ this._y=v; }
+  get z(){ return this._z; } set z(v){ this._z=v; }
+  get w(){ return this._w; } set w(v){ this._w=v; }
+  copy(q){ this._x=q.x; this._y=q.y; this._z=q.z; this._w=q.w; if(this._cb) this._cb(); return this; }
+  setFromEuler(e){
+    const c1=Math.cos(e.x/2),c2=Math.cos(e.y/2),c3=Math.cos(e.z/2);
+    const s1=Math.sin(e.x/2),s2=Math.sin(e.y/2),s3=Math.sin(e.z/2);
+    this._x=s1*c2*c3+c1*s2*s3; this._y=c1*s2*c3-s1*c2*s3;
+    this._z=c1*c2*s3+s1*s2*c3; this._w=c1*c2*c3-s1*s2*s3;
+    if(this._cb) this._cb(); return this;
+  }
+  setFromUnitVectors(vFrom,vTo){
+    const EPS=0.000001;
+    let r=vFrom.x*vTo.x+vFrom.y*vTo.y+vFrom.z*vTo.z+1, x, y, z;
+    if(r<EPS){
+      r=0;
+      if(Math.abs(vFrom.x)>Math.abs(vFrom.z)){ x=-vFrom.y; y=vFrom.x; z=0; }
+      else{ x=0; y=-vFrom.z; z=vFrom.y; }
+    }else{ x=vFrom.y*vTo.z-vFrom.z*vTo.y; y=vFrom.z*vTo.x-vFrom.x*vTo.z; z=vFrom.x*vTo.y-vFrom.y*vTo.x; }
+    const l=Math.sqrt(x*x+y*y+z*z+r*r)||1;
+    this._x=x/l; this._y=y/l; this._z=z/l; this._w=r/l;
+    if(this._cb) this._cb(); return this;
+  }
+}
+class Matrix4{
+  constructor(){ this.elements=new Float32Array(16); this.identity(); }
+  identity(){ const e=this.elements; e[0]=1;e[1]=0;e[2]=0;e[3]=0;e[4]=0;e[5]=1;e[6]=0;e[7]=0;e[8]=0;e[9]=0;e[10]=1;e[11]=0;e[12]=0;e[13]=0;e[14]=0;e[15]=1; return this; }
+  copy(m){ this.elements.set(m.elements); return this; }
+  multiplyMatrices(a,b){
+    const ae=a.elements, be=b.elements, te=this.elements;
+    const a11=ae[0],a12=ae[4],a13=ae[8],a14=ae[12],a21=ae[1],a22=ae[5],a23=ae[9],a24=ae[13],
+          a31=ae[2],a32=ae[6],a33=ae[10],a34=ae[14],a41=ae[3],a42=ae[7],a43=ae[11],a44=ae[15];
+    const b11=be[0],b12=be[4],b13=be[8],b14=be[12],b21=be[1],b22=be[5],b23=be[9],b24=be[13],
+          b31=be[2],b32=be[6],b33=be[10],b34=be[14],b41=be[3],b42=be[7],b43=be[11],b44=be[15];
+    te[0]=a11*b11+a12*b21+a13*b31+a14*b41; te[4]=a11*b12+a12*b22+a13*b32+a14*b42;
+    te[8]=a11*b13+a12*b23+a13*b33+a14*b43; te[12]=a11*b14+a12*b24+a13*b34+a14*b44;
+    te[1]=a21*b11+a22*b21+a23*b31+a24*b41; te[5]=a21*b12+a22*b22+a23*b32+a24*b42;
+    te[9]=a21*b13+a22*b23+a23*b33+a24*b43; te[13]=a21*b14+a22*b24+a23*b34+a24*b44;
+    te[2]=a31*b11+a32*b21+a33*b31+a34*b41; te[6]=a31*b12+a32*b22+a33*b32+a34*b42;
+    te[10]=a31*b13+a32*b23+a33*b33+a34*b43; te[14]=a31*b14+a32*b24+a33*b34+a34*b44;
+    te[3]=a41*b11+a42*b21+a43*b31+a44*b41; te[7]=a41*b12+a42*b22+a43*b32+a44*b42;
+    te[11]=a41*b13+a42*b23+a43*b33+a44*b43; te[15]=a41*b14+a42*b24+a43*b34+a44*b44;
+    return this;
+  }
+  compose(p,q,s){
+    const e=this.elements, x=q.x,y=q.y,z=q.z,w=q.w;
+    const x2=x+x,y2=y+y,z2=z+z;
+    const xx=x*x2,xy=x*y2,xz=x*z2,yy=y*y2,yz=y*z2,zz=z*z2,wx=w*x2,wy=w*y2,wz=w*z2;
+    e[0]=(1-(yy+zz))*s.x; e[1]=(xy+wz)*s.x; e[2]=(xz-wy)*s.x; e[3]=0;
+    e[4]=(xy-wz)*s.y; e[5]=(1-(xx+zz))*s.y; e[6]=(yz+wx)*s.y; e[7]=0;
+    e[8]=(xz+wy)*s.z; e[9]=(yz-wx)*s.z; e[10]=(1-(xx+yy))*s.z; e[11]=0;
+    e[12]=p.x; e[13]=p.y; e[14]=p.z; e[15]=1;
+    return this;
+  }
+  /* view matrix looking from eye toward target */
+  lookAt(eye,target,up){
+    const e=this.elements;
+    let zx=eye.x-target.x, zy=eye.y-target.y, zz=eye.z-target.z;
+    let l=Math.sqrt(zx*zx+zy*zy+zz*zz)||1; zx/=l; zy/=l; zz/=l;
+    let xx=up.y*zz-up.z*zy, xy=up.z*zx-up.x*zz, xz=up.x*zy-up.y*zx;
+    l=Math.sqrt(xx*xx+xy*xy+xz*xz)||1; xx/=l; xy/=l; xz/=l;
+    const yx=zy*xz-zz*xy, yy=zz*xx-zx*xz, yz=zx*xy-zy*xx;
+    e[0]=xx; e[1]=yx; e[2]=zx; e[3]=0;
+    e[4]=xy; e[5]=yy; e[6]=zy; e[7]=0;
+    e[8]=xz; e[9]=yz; e[10]=zz; e[11]=0;
+    e[12]=-(xx*eye.x+xy*eye.y+xz*eye.z);
+    e[13]=-(yx*eye.x+yy*eye.y+yz*eye.z);
+    e[14]=-(zx*eye.x+zy*eye.y+zz*eye.z);
+    e[15]=1;
+    return this;
+  }
+  makePerspective(fovDeg,aspect,near,far){
+    const e=this.elements, f=1/Math.tan(fovDeg*Math.PI/360);
+    e[0]=f/aspect; e[1]=0; e[2]=0; e[3]=0;
+    e[4]=0; e[5]=f; e[6]=0; e[7]=0;
+    e[8]=0; e[9]=0; e[10]=(far+near)/(near-far); e[11]=-1;
+    e[12]=0; e[13]=0; e[14]=(2*far*near)/(near-far); e[15]=0;
+    return this;
+  }
+}
+
+/* ---------------- scene graph ---------------- */
+let _oid=0;
+class Object3D{
+  constructor(){
+    this.id=_oid++;
+    this.position=new Vector3(); this.scale=new Vector3(1,1,1);
+    this.quaternion=new Quaternion(); this.rotation=new Euler();
+    let lock=false; const self=this;
+    this.rotation._cb=function(){ if(lock) return; lock=true; self.quaternion.setFromEuler(self.rotation); lock=false; };
+    this.quaternion._cb=function(){ if(lock) return; lock=true; self.rotation.setFromQuaternion(self.quaternion); lock=false; };
+    this.parent=null; this.children=[];
+    this.visible=true; this.renderOrder=0; this.frustumCulled=true;
+    this.matrix=new Matrix4(); this.matrixWorld=new Matrix4();
+    this.userData={};
+  }
+  add(o){ o.parent=this; this.children.push(o); return this; }
+  remove(o){ const i=this.children.indexOf(o); if(i>=0){ this.children.splice(i,1); o.parent=null; } return this; }
+  traverse(fn){ fn(this); for(let i=0;i<this.children.length;i++) this.children[i].traverse(fn); }
+  updateMatrix(){ this.matrix.compose(this.position,this.quaternion,this.scale); }
+  updateMatrixWorld(){
+    this.updateMatrix();
+    if(this.parent) this.matrixWorld.multiplyMatrices(this.parent.matrixWorld,this.matrix);
+    else this.matrixWorld.copy(this.matrix);
+    for(let i=0;i<this.children.length;i++) this.children[i].updateMatrixWorld();
+  }
+}
+class Group extends Object3D{}
+class Mesh extends Object3D{ constructor(g,m){ super(); this.geometry=g; this.material=m; this.isMesh=true; } }
+class LineSegments extends Object3D{ constructor(g,m){ super(); this.geometry=g; this.material=m; this.isLine=true; } }
+class Points extends Object3D{ constructor(g,m){ super(); this.geometry=g; this.material=m; this.isPoints=true; } }
+class Sprite extends Object3D{ constructor(m){ super(); this.material=m; this.isSprite=true; } }
+class Scene extends Object3D{ constructor(){ super(); this.fog=null; this.isScene=true; } }
+class AmbientLight extends Object3D{ constructor(c,i){ super(); this.color=(c===undefined?0xffffff:c); this.intensity=(i===undefined?1:i); this.isAmbient=true; } }
+class DirectionalLight extends Object3D{ constructor(c,i){ super(); this.color=(c===undefined?0xffffff:c); this.intensity=(i===undefined?1:i); this.isDir=true; } }
+class PointLight extends Object3D{ constructor(c,i,d){ super(); this.color=(c===undefined?0xffffff:c); this.intensity=(i===undefined?1:i); this.distance=(d===undefined?0:d); this.isPoint=true; } }
+class Fog{ constructor(c,n,f){ this.color=c; this.near=n; this.far=f; } }
+class PerspectiveCamera extends Object3D{
+  constructor(fov,aspect,near,far){
+    super(); this.fov=fov; this.aspect=aspect; this.near=near; this.far=far;
+    this.projectionMatrix=new Matrix4(); this._tgt=new Vector3();
+    this.updateProjectionMatrix();
+  }
+  updateProjectionMatrix(){ this.projectionMatrix.makePerspective(this.fov,this.aspect,this.near,this.far); }
+  lookAt(v){ this._tgt.copy(v); return this; }
+}
+
+/* ---------------- geometry ---------------- */
+class BufferAttribute{
+  constructor(arr,itemSize){ this.array=arr; this.itemSize=itemSize; this.needsUpdate=true; this._buf=null; }
+  get count(){ return this.array.length/this.itemSize; }
+}
+class BufferGeometry{
+  constructor(){ this.attributes={}; this.parameters={}; }
+  setAttribute(n,a){ this.attributes[n]=a; return this; }
+}
+function arr3(list){ return new Float32Array(list); }
+class BoxGeometry extends BufferGeometry{
+  constructor(w,h,d){
+    super(); w=w||1; h=h||1; d=d||1;
+    this.parameters={width:w,height:h,depth:d};
+    const x=w/2,y=h/2,z=d/2, P=[],Nn=[],U=[];
+    function quad(a,b,c,dd,n){
+      const vs=[a,b,c,a,c,dd];
+      for(let i=0;i<6;i++){ P.push(vs[i][0],vs[i][1],vs[i][2]); Nn.push(n[0],n[1],n[2]); }
+      U.push(0,0, 1,0, 1,1, 0,0, 1,1, 0,1);
+    }
+    quad([-x,-y,z],[x,-y,z],[x,y,z],[-x,y,z],[0,0,1]);
+    quad([x,-y,-z],[-x,-y,-z],[-x,y,-z],[x,y,-z],[0,0,-1]);
+    quad([x,-y,z],[x,-y,-z],[x,y,-z],[x,y,z],[1,0,0]);
+    quad([-x,-y,-z],[-x,-y,z],[-x,y,z],[-x,y,-z],[-1,0,0]);
+    quad([-x,y,z],[x,y,z],[x,y,-z],[-x,y,-z],[0,1,0]);
+    quad([-x,-y,-z],[x,-y,-z],[x,-y,z],[-x,-y,z],[0,-1,0]);
+    this.setAttribute("position",new BufferAttribute(arr3(P),3));
+    this.setAttribute("normal",new BufferAttribute(arr3(Nn),3));
+    this.setAttribute("uv",new BufferAttribute(arr3(U),2));
+  }
+}
+class PlaneGeometry extends BufferGeometry{
+  constructor(w,h){
+    super(); w=w||1; h=h||1;
+    const x=w/2,y=h/2;
+    this.setAttribute("position",new BufferAttribute(arr3([-x,-y,0, x,-y,0, x,y,0, -x,-y,0, x,y,0, -x,y,0]),3));
+    this.setAttribute("normal",new BufferAttribute(arr3([0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1, 0,0,1]),3));
+    this.setAttribute("uv",new BufferAttribute(arr3([0,0, 1,0, 1,1, 0,0, 1,1, 0,1]),2));
+  }
+}
+class CylinderGeometry extends BufferGeometry{
+  constructor(rt,rb,h,seg){
+    super(); rt=(rt===undefined?1:rt); rb=(rb===undefined?1:rb); h=h||1; seg=seg||20;
+    const P=[],Nn=[],U=[], hh=h/2, slope=(rb-rt)/(h||1);
+    for(let i=0;i<seg;i++){
+      const a0=i/seg*Math.PI*2, a1=(i+1)/seg*Math.PI*2;
+      const c0=Math.cos(a0),s0=Math.sin(a0),c1=Math.cos(a1),s1=Math.sin(a1);
+      const q=[[rb*c0,-hh,rb*s0],[rb*c1,-hh,rb*s1],[rt*c1,hh,rt*s1],[rt*c0,hh,rt*s0]];
+      const n0=[c0,slope,s0], n1=[c1,slope,s1];
+      const l0=Math.sqrt(n0[0]*n0[0]+n0[1]*n0[1]+n0[2]*n0[2])||1,
+            l1=Math.sqrt(n1[0]*n1[0]+n1[1]*n1[1]+n1[2]*n1[2])||1;
+      const vs=[q[0],q[1],q[2], q[0],q[2],q[3]], ns=[[n0[0]/l0,n0[1]/l0,n0[2]/l0],[n1[0]/l1,n1[1]/l1,n1[2]/l1]];
+      const order=[0,1,1, 0,1,0];
+      for(let k=0;k<6;k++){ const v=vs[k],n=ns[order[k]]; P.push(v[0],v[1],v[2]); Nn.push(n[0],n[1],n[2]); U.push(k%2,Math.floor(k/3)); }
+    }
+    function cap(r,yy,ny){
+      if(r<=0) return;
+      for(let i=0;i<seg;i++){
+        const a0=i/seg*Math.PI*2, a1=(i+1)/seg*Math.PI*2;
+        const v0=[0,yy,0], v1=[r*Math.cos(a0),yy,r*Math.sin(a0)], v2=[r*Math.cos(a1),yy,r*Math.sin(a1)];
+        const vs=(ny>0)?[v0,v1,v2]:[v0,v2,v1];
+        for(let k=0;k<3;k++){ P.push(vs[k][0],vs[k][1],vs[k][2]); Nn.push(0,ny,0); U.push(0.5,0.5); }
+      }
+    }
+    cap(rb,-hh,-1); cap(rt,hh,1);
+    this.setAttribute("position",new BufferAttribute(arr3(P),3));
+    this.setAttribute("normal",new BufferAttribute(arr3(Nn),3));
+    this.setAttribute("uv",new BufferAttribute(arr3(U),2));
+  }
+}
+class ConeGeometry extends CylinderGeometry{ constructor(r,h,seg){ super(0,r||1,h||1,seg||20); } }
+class SphereGeometry extends BufferGeometry{
+  constructor(r,ws,hs){
+    super(); r=r||1; ws=ws||20; hs=hs||14;
+    const P=[],Nn=[],U=[];
+    function vtx(ix,iy){
+      const u=ix/ws, v=iy/hs, th=v*Math.PI, ph=u*Math.PI*2;
+      const x=Math.sin(th)*Math.cos(ph), y=Math.cos(th), z=Math.sin(th)*Math.sin(ph);
+      return {p:[r*x,r*y,r*z],n:[x,y,z],u:[u,1-v]};
+    }
+    for(let iy=0;iy<hs;iy++) for(let ix=0;ix<ws;ix++){
+      const a=vtx(ix,iy),b=vtx(ix+1,iy),c=vtx(ix+1,iy+1),d=vtx(ix,iy+1);
+      [a,b,d, b,c,d].forEach((v)=>{ P.push(v.p[0],v.p[1],v.p[2]); Nn.push(v.n[0],v.n[1],v.n[2]); U.push(v.u[0],v.u[1]); });
+    }
+    this.setAttribute("position",new BufferAttribute(arr3(P),3));
+    this.setAttribute("normal",new BufferAttribute(arr3(Nn),3));
+    this.setAttribute("uv",new BufferAttribute(arr3(U),2));
+  }
+}
+class TorusGeometry extends BufferGeometry{
+  constructor(R,r,rs,ts,arc){
+    super(); R=(R===undefined?1:R); r=(r===undefined?0.4:r); rs=rs||10; ts=ts||32; arc=(arc===undefined?Math.PI*2:arc);
+    const P=[],Nn=[],U=[];
+    function vtx(i,j){
+      const u=i/ts*arc, v=j/rs*Math.PI*2;
+      const cx=Math.cos(u),sx=Math.sin(u),cy=Math.cos(v),sy=Math.sin(v);
+      return {p:[(R+r*cy)*cx,(R+r*cy)*sx,r*sy],n:[cy*cx,cy*sx,sy],u:[i/ts,j/rs]};
+    }
+    for(let i=0;i<ts;i++) for(let j=0;j<rs;j++){
+      const a=vtx(i,j),b=vtx(i+1,j),c=vtx(i+1,j+1),d=vtx(i,j+1);
+      [a,b,d, b,c,d].forEach((v)=>{ P.push(v.p[0],v.p[1],v.p[2]); Nn.push(v.n[0],v.n[1],v.n[2]); U.push(v.u[0],v.u[1]); });
+    }
+    this.setAttribute("position",new BufferAttribute(arr3(P),3));
+    this.setAttribute("normal",new BufferAttribute(arr3(Nn),3));
+    this.setAttribute("uv",new BufferAttribute(arr3(U),2));
+  }
+}
+class OctahedronGeometry extends BufferGeometry{
+  constructor(r){
+    super(); r=r||1;
+    const px=[1,0,0],nx=[-1,0,0],py=[0,1,0],ny=[0,-1,0],pz=[0,0,1],nz=[0,0,-1];
+    const faces=[[py,pz,px],[py,px,nz],[py,nz,nx],[py,nx,pz],[ny,px,pz],[ny,nz,px],[ny,nx,nz],[ny,pz,nx]];
+    const P=[],Nn=[],U=[];
+    faces.forEach((f)=>{
+      let a=f[0],b=f[1],c=f[2];
+      const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
+      let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+      const cx=(a[0]+b[0]+c[0])/3, cy=(a[1]+b[1]+c[1])/3, cz=(a[2]+b[2]+c[2])/3;
+      if(nx*cx+ny*cy+nz*cz<0){ const t=b; b=c; c=t; nx=-nx; ny=-ny; nz=-nz; }
+      const l=Math.sqrt(nx*nx+ny*ny+nz*nz)||1; nx/=l; ny/=l; nz/=l;
+      [a,b,c].forEach((v)=>{ P.push(v[0]*r,v[1]*r,v[2]*r); Nn.push(nx,ny,nz); U.push(0.5,0.5); });
+    });
+    this.setAttribute("position",new BufferAttribute(arr3(P),3));
+    this.setAttribute("normal",new BufferAttribute(arr3(Nn),3));
+    this.setAttribute("uv",new BufferAttribute(arr3(U),2));
+  }
+}
+class EdgesGeometry extends BufferGeometry{
+  constructor(geo){
+    super();
+    const w=geo.parameters.width/2,h=geo.parameters.height/2,d=geo.parameters.depth/2;
+    const c=[[-w,-h,-d],[w,-h,-d],[w,h,-d],[-w,h,-d],[-w,-h,d],[w,-h,d],[w,h,d],[-w,h,d]];
+    const E=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+    const P=[];
+    E.forEach((e)=>{ P.push(c[e[0]][0],c[e[0]][1],c[e[0]][2], c[e[1]][0],c[e[1]][1],c[e[1]][2]); });
+    this.setAttribute("position",new BufferAttribute(arr3(P),3));
+  }
+}
+class GridHelper extends LineSegments{
+  constructor(size,div,c1,c2){
+    const g=new BufferGeometry(), P=[],C=[];
+    const a1=hexRGB(c1),a2=hexRGB(c2===undefined?c1:c2);
+    for(let i=0;i<=div;i++){
+      const p=-size/2+size*i/div, c=(i===Math.round(div/2))?a1:a2;
+      P.push(p,0,-size/2, p,0,size/2, -size/2,0,p, size/2,0,p);
+      for(let k=0;k<4;k++) C.push(c[0],c[1],c[2]);
+    }
+    g.setAttribute("position",new BufferAttribute(arr3(P),3));
+    g.setAttribute("color",new BufferAttribute(arr3(C),3));
+    super(g,new LineBasicMaterial({vertexColors:true,transparent:true,opacity:0.5}));
+  }
+}
+
+/* ---------------- materials & textures ---------------- */
+function matBase(o){
+  o=o||{};
+  return {
+    transparent:!!o.transparent, opacity:(o.opacity===undefined?1:o.opacity),
+    depthWrite:(o.depthWrite===undefined?true:o.depthWrite),
+    depthTest:(o.depthTest===undefined?true:o.depthTest),
+    blending:(o.blending===undefined?NormalBlending:o.blending),
+    side:(o.side===undefined?FrontSide:o.side),
+    fog:(o.fog===undefined?true:o.fog),
+    userData:{}
+  };
+}
+class MeshStandardMaterial{
+  constructor(o){ o=o||{}; const b=matBase(o);
+    this.color=(o.color===undefined?0xffffff:o.color);
+    this.roughness=(o.roughness===undefined?0.6:o.roughness);
+    this.metalness=(o.metalness===undefined?0.15:o.metalness);
+    this.emissive=(o.emissive===undefined?0x000000:o.emissive);
+    this.emissiveIntensity=(o.emissiveIntensity===undefined?1:o.emissiveIntensity);
+    Object.assign(this,b); this.isMeshStandard=true;
+  }
+}
+class MeshBasicMaterial{
+  constructor(o){ o=o||{}; const b=matBase(o);
+    this.color=(o.color===undefined?0xffffff:o.color); this.map=o.map||null;
+    Object.assign(this,b); this.isMeshBasic=true;
+  }
+}
+class LineBasicMaterial{
+  constructor(o){ o=o||{}; const b=matBase(o);
+    this.color=(o.color===undefined?0xffffff:o.color); this.vertexColors=!!o.vertexColors;
+    Object.assign(this,b); this.isLineBasic=true;
+  }
+}
+class SpriteMaterial{
+  constructor(o){ o=o||{}; const b=matBase(o);
+    this.map=o.map||null; this.color=(o.color===undefined?0xffffff:o.color);
+    Object.assign(this,b); this.isSprite=true;
+  }
+}
+class PointsMaterial{
+  constructor(o){ o=o||{}; const b=matBase(o);
+    this.color=(o.color===undefined?0xffffff:o.color); this.size=(o.size===undefined?1:o.size);
+    Object.assign(this,b); this.isPoints=true;
+  }
+}
+class CanvasTexture{
+  constructor(img){ this.image=img; this.needsUpdate=true; this._tex=null; this.anisotropy=1; }
+}
+
+/* ---------------- renderer ---------------- */
+const V_MESH=[
+"attribute vec3 position; attribute vec3 normal; attribute vec2 uv;",
+"uniform mat4 uProj; uniform mat4 uView; uniform mat4 uModel;",
+"varying vec3 vN; varying vec3 vW; varying float vFog;",
+"void main(){ vec4 w=uModel*vec4(position,1.0); vW=w.xyz; vec4 wn=uModel*vec4(normal,0.0); vN=wn.xyz;",
+" vec4 v=uView*w; vFog=-v.z; gl_Position=uProj*v; }"
+].join("\n");
+const F_MESH=[
+"precision mediump float;",
+"uniform vec3 uColor; uniform vec3 uEmissive; uniform float uEInt; uniform float uOpacity;",
+"uniform vec3 uAmbient; uniform vec3 uDirDir; uniform vec3 uDirColor;",
+"uniform vec3 uPLPos[4]; uniform vec3 uPLCol[4]; uniform vec2 uPLID[4]; uniform int uPLN;",
+"uniform vec3 uFogColor; uniform vec2 uFogNF; uniform float uFogOn;",
+"varying vec3 vN; varying vec3 vW; varying float vFog;",
+"void main(){",
+" vec3 n=normalize(vN);",
+" vec3 lig=uAmbient+uDirColor*max(dot(n,normalize(uDirDir)),0.0);",
+" for(int i=0;i<4;i++){ if(i<uPLN){",
+"  vec3 L=uPLPos[i]-vW; float d=length(L);",
+"  float att=clamp(1.0-d/max(uPLID[i].y,0.001),0.0,1.0); att*=att;",
+"  lig+=uPLCol[i]*(max(dot(n,L/max(d,0.0001)),0.0)*att*uPLID[i].x);",
+" }}",
+" vec3 col=uColor*lig+uEmissive*uEInt;",
+" float f=uFogOn*smoothstep(uFogNF.x,uFogNF.y,vFog);",
+" col=mix(col,uFogColor,clamp(f,0.0,1.0));",
+" gl_FragColor=vec4(col,uOpacity); }"
+].join("\n");
+const V_BASIC=[
+"attribute vec3 position; attribute vec2 uv;",
+"uniform mat4 uProj; uniform mat4 uView; uniform mat4 uModel;",
+"varying vec2 vUv; varying float vFog;",
+"void main(){ vUv=uv; vec4 w=uModel*vec4(position,1.0); vec4 v=uView*w; vFog=-v.z; gl_Position=uProj*v; }"
+].join("\n");
+const F_BASIC=[
+"precision mediump float;",
+"uniform vec3 uColor; uniform float uOpacity; uniform sampler2D uMap; uniform float uUseMap;",
+"uniform vec3 uFogColor; uniform vec2 uFogNF; uniform float uFogOn;",
+"varying vec2 vUv; varying float vFog;",
+"void main(){",
+" vec4 t=(uUseMap>0.5)?texture2D(uMap,vUv):vec4(1.0,1.0,1.0,1.0);",
+" vec3 col=uColor*t.rgb; float a=uOpacity*t.a;",
+" float f=uFogOn*smoothstep(uFogNF.x,uFogNF.y,vFog);",
+" col=mix(col,uFogColor,clamp(f,0.0,1.0));",
+" gl_FragColor=vec4(col,a); }"
+].join("\n");
+const V_LINE=[
+"attribute vec3 position; attribute vec3 color;",
+"uniform mat4 uProj; uniform mat4 uView; uniform mat4 uModel; uniform float uUseVC;",
+"varying vec3 vC; varying float vFog;",
+"void main(){ vC=color; vec4 w=uModel*vec4(position,1.0); vec4 v=uView*w; vFog=-v.z; gl_Position=uProj*v; }"
+].join("\n");
+const F_LINE=[
+"precision mediump float;",
+"uniform vec3 uColor; uniform float uOpacity; uniform float uUseVC;",
+"uniform vec3 uFogColor; uniform vec2 uFogNF; uniform float uFogOn;",
+"varying vec3 vC; varying float vFog;",
+"void main(){",
+" vec3 col=(uUseVC>0.5)?vC:uColor;",
+" float f=uFogOn*smoothstep(uFogNF.x,uFogNF.y,vFog);",
+" col=mix(col,uFogColor,clamp(f,0.0,1.0));",
+" gl_FragColor=vec4(col,uOpacity); }"
+].join("\n");
+const V_SPRITE=[
+"attribute vec2 corner; attribute vec2 uv;",
+"uniform mat4 uProj; uniform mat4 uView; uniform vec3 uCenter; uniform vec2 uScale;",
+"uniform vec3 uRight; uniform vec3 uUp;",
+"varying vec2 vUv; varying float vFog;",
+"void main(){ vUv=uv;",
+" vec3 w=uCenter+uRight*(corner.x*uScale.x)+uUp*(corner.y*uScale.y);",
+" vec4 v=uView*vec4(w,1.0); vFog=-v.z; gl_Position=uProj*v; }"
+].join("\n");
+const F_SPRITE=[
+"precision mediump float;",
+"uniform sampler2D uMap; uniform vec3 uColor; uniform float uOpacity;",
+"uniform vec3 uFogColor; uniform vec2 uFogNF; uniform float uFogOn;",
+"varying vec2 vUv; varying float vFog;",
+"void main(){",
+" vec4 t=texture2D(uMap,vUv);",
+" vec3 col=t.rgb*uColor; float a=t.a*uOpacity;",
+" if(a<0.004) discard;",
+" float f=uFogOn*smoothstep(uFogNF.x,uFogNF.y,vFog);",
+" col=mix(col,uFogColor,clamp(f,0.0,1.0));",
+" gl_FragColor=vec4(col,a); }"
+].join("\n");
+const V_POINTS=[
+"attribute vec3 position;",
+"uniform mat4 uProj; uniform mat4 uView; uniform mat4 uModel; uniform float uSize; uniform float uPScale;",
+"varying float vFog;",
+"void main(){ vec4 w=uModel*vec4(position,1.0); vec4 v=uView*w; vFog=-v.z;",
+" gl_Position=uProj*v; gl_PointSize=uSize*uPScale/max(-v.z,0.1); }"
+].join("\n");
+const F_POINTS=[
+"precision mediump float;",
+"uniform vec3 uColor; uniform float uOpacity;",
+"uniform vec3 uFogColor; uniform vec2 uFogNF; uniform float uFogOn;",
+"varying float vFog;",
+"void main(){",
+" float m=1.0-smoothstep(0.12,0.5,length(gl_PointCoord-vec2(0.5)));",
+" float f=uFogOn*smoothstep(uFogNF.x,uFogNF.y,vFog);",
+" vec3 col=mix(uColor,uFogColor,clamp(f,0.0,1.0));",
+" gl_FragColor=vec4(col,uOpacity*m); }"
+].join("\n");
+
+class WebGLRenderer{
+  constructor(o){
+    o=o||{};
+    this.domElement=document.createElement("canvas");
+    const opts={antialias:!!o.antialias,alpha:o.alpha!==false,depth:true,stencil:false,
+      failIfMajorPerformanceCaveat:false,powerPreference:"high-performance"};
+    const gl=this.domElement.getContext("webgl2",opts)||this.domElement.getContext("webgl",opts)
+        ||this.domElement.getContext("experimental-webgl",opts);
+    if(!gl) throw new Error("WebGL unavailable");
+    this.gl=gl; this._pr=1; this._w=300; this._h=300;
+    this._clear=[1,1,1,1];
+    this.stats={draws:0,tris:0}; this._mode="webgl";
+    try{ const vv=gl.getParameter(gl.VERSION)||""; if(vv.indexOf("2.0")>=0) this._mode="webgl2"; }catch(e){}
+    this._pMesh=this._prog(V_MESH,F_MESH);
+    this._pBasic=this._prog(V_BASIC,F_BASIC);
+    this._pLine=this._prog(V_LINE,F_LINE);
+    this._pSprite=this._prog(V_SPRITE,F_SPRITE);
+    this._pPoints=this._prog(V_POINTS,F_POINTS);
+    /* shared sprite quad */
+    const qb=gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER,qb);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-0.5,-0.5, 0.5,-0.5, 0.5,0.5, -0.5,-0.5, 0.5,0.5, -0.5,0.5]),gl.STATIC_DRAW);
+    const ub=gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER,ub);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,0, 1,0, 1,1, 0,0, 1,1, 0,1]),gl.STATIC_DRAW);
+    this._qPos=qb; this._qUv=ub;
+    this._view=new Matrix4();
+    this._zero=new Float32Array([0,0,0]);
+  }
+  _prog(vs,fs){
+    const gl=this.gl;
+    function sh(t,s){ const h=gl.createShader(t); gl.shaderSource(h,s); gl.compileShader(h);
+      if(!gl.getShaderParameter(h,gl.COMPILE_STATUS)) throw new Error("Shader: "+gl.getShaderInfoLog(h)); return h; }
+    const p=gl.createProgram();
+    gl.attachShader(p,sh(gl.VERTEX_SHADER,vs)); gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fs));
+    gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error("Program: "+gl.getProgramInfoLog(p));
+    return {h:p,u:{},a:{}};
+  }
+  _uloc(pg,n){ if(pg.u[n]===undefined) pg.u[n]=this.gl.getUniformLocation(pg.h,n); return pg.u[n]; }
+  _aloc(pg,n){ if(pg.a[n]===undefined) pg.a[n]=this.gl.getAttribLocation(pg.h,n); return pg.a[n]; }
+  setPixelRatio(r){ this._pr=r; this._resize(); }
+  setSize(w,h){ this._w=w; this._h=h; this._resize(); }
+  _resize(){
+    this.domElement.width=Math.max(1,Math.round(this._w*this._pr));
+    this.domElement.height=Math.max(1,Math.round(this._h*this._pr));
+    this.domElement.style.width=this._w+"px"; this.domElement.style.height=this._h+"px";
+  }
+  setClearColor(hex,a){ const c=hexRGB(hex); this._clear=[c[0],c[1],c[2],(a===undefined?1:a)]; }
+  getSize(){ return [this._w,this._h]; }
+  _bufFor(attr){
+    const gl=this.gl;
+    if(!attr._buf){ attr._buf=gl.createBuffer(); attr.needsUpdate=true; }
+    if(attr.needsUpdate){
+      gl.bindBuffer(gl.ARRAY_BUFFER,attr._buf);
+      gl.bufferData(gl.ARRAY_BUFFER,attr.array,gl.DYNAMIC_DRAW);
+      attr.needsUpdate=false;
+    }
+    return attr._buf;
+  }
+  _texFor(tex){
+    const gl=this.gl;
+    if(!tex._tex){ tex._tex=gl.createTexture(); tex.needsUpdate=true; }
+    if(tex.needsUpdate){
+      gl.bindTexture(gl.TEXTURE_2D,tex._tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,1);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,tex.image);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      tex.needsUpdate=false;
+    }
+    return tex._tex;
+  }
+  _bind(pg,name,attr,n){
+    const gl=this.gl, loc=this._aloc(pg,name);
+    if(loc<0) return -1;
+    gl.bindBuffer(gl.ARRAY_BUFFER,this._bufFor(attr));
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc,n,gl.FLOAT,false,0,0);
+    return loc;
+  }
+  _state(m){
+    const gl=this.gl;
+    if(m.transparent){ gl.enable(gl.BLEND);
+      if(m.blending===AdditiveBlending) gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
+      else gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    }else gl.disable(gl.BLEND);
+    gl.depthMask(m.depthWrite!==false);
+    if(m.depthTest!==false) gl.enable(gl.DEPTH_TEST); else gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+  }
+  _fog(pg,m,fog){
+    const gl=this.gl;
+    if(fog&&m.fog!==false){ const c=hexRGB(fog.color);
+      gl.uniform3f(this._uloc(pg,"uFogColor"),c[0],c[1],c[2]);
+      gl.uniform2f(this._uloc(pg,"uFogNF"),fog.near,fog.far);
+      gl.uniform1f(this._uloc(pg,"uFogOn"),1);
+    }else gl.uniform1f(this._uloc(pg,"uFogOn"),0);
+  }
+  render(scene,camera){
+    const gl=this.gl;
+    gl.viewport(0,0,this.domElement.width,this.domElement.height);
+    gl.clearColor(this._clear[0],this._clear[1],this._clear[2],this._clear[3]);
+    gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    this.stats.draws=0; this.stats.tris=0;
+    scene.updateMatrixWorld();
+    const UP={x:0,y:1,z:0};
+    this._view.lookAt(camera.position,camera._tgt||{x:0,y:0,z:0},UP);
+    const V=this._view.elements, P=camera.projectionMatrix.elements;
+    /* camera right/up for billboards */
+    const right=[V[0],V[4],V[8]], up=[V[1],V[5],V[9]];
+    /* gather */
+    const amb=[0,0,0]; let dir=null; const pts=[];
+    const items=[];
+    const e=camera.position;
+    (function walk(o,vis){
+      const v=vis&&o.visible; if(!v) return;
+      if(o.isAmbient){ const c=hexRGB(o.color); amb[0]+=c[0]*o.intensity; amb[1]+=c[1]*o.intensity; amb[2]+=c[2]*o.intensity; }
+      else if(o.isDir&&!dir) dir=o;
+      else if(o.isPoint&&pts.length<4) pts.push(o);
+      else if(o.isMesh||o.isLine||o.isPoints||o.isSprite){
+        const me=o.matrixWorld.elements;
+        const dx=me[12]-e.x, dy=me[13]-e.y, dz=me[14]-e.z;
+        items.push({o:o,depth:dx*dx+dy*dy+dz*dz});
+      }
+      for(let i=0;i<o.children.length;i++) walk(o.children[i],true);
+    })(scene,true);
+    items.sort((a,b)=>{
+      const ta=a.o.material.transparent?1:0, tb=b.o.material.transparent?1:0;
+      if(ta!==tb) return ta-tb;
+      if(a.o.renderOrder!==b.o.renderOrder) return a.o.renderOrder-b.o.renderOrder;
+      return b.depth-a.depth;
+    });
+    /* lights */
+    let dirDir=[0.4,0.8,0.3], dirCol=[0,0,0];
+    if(dir){ const me=dir.matrixWorld.elements;
+      const l=Math.sqrt(me[12]*me[12]+me[13]*me[13]+me[14]*me[14])||1;
+      dirDir=[me[12]/l,me[13]/l,me[14]/l];
+      const c=hexRGB(dir.color); dirCol=[c[0]*dir.intensity,c[1]*dir.intensity,c[2]*dir.intensity];
+    }
+    const plPos=new Float32Array(12), plCol=new Float32Array(12), plID=new Float32Array(8);
+    pts.forEach((L,i)=>{
+      const me=L.matrixWorld.elements, c=hexRGB(L.color);
+      plPos[i*3]=me[12]; plPos[i*3+1]=me[13]; plPos[i*3+2]=me[14];
+      plCol[i*3]=c[0]; plCol[i*3+1]=c[1]; plCol[i*3+2]=c[2];
+      plID[i*2]=L.intensity; plID[i*2+1]=(L.distance||20);
+    });
+    const fog=scene.fog;
+    const pScale=this.domElement.height/(2*Math.tan(camera.fov*Math.PI/360));
+    for(let k=0;k<items.length;k++){
+      const o=items[k].o, m=o.material;
+      if(m.transparent&&m.opacity<0.004) continue;
+      this._state(m);
+      this.stats.draws++;
+      const MW=o.matrixWorld.elements;
+      if(o.isMesh&&m.isMeshStandard){
+        const pg=this._pMesh; gl.useProgram(pg.h);
+        const c=hexRGB(m.color), em=hexRGB(m.emissive);
+        gl.uniformMatrix4fv(this._uloc(pg,"uProj"),false,P);
+        gl.uniformMatrix4fv(this._uloc(pg,"uView"),false,V);
+        gl.uniformMatrix4fv(this._uloc(pg,"uModel"),false,MW);
+        gl.uniform3f(this._uloc(pg,"uColor"),c[0],c[1],c[2]);
+        gl.uniform3f(this._uloc(pg,"uEmissive"),em[0],em[1],em[2]);
+        gl.uniform1f(this._uloc(pg,"uEInt"),m.emissiveIntensity);
+        gl.uniform1f(this._uloc(pg,"uOpacity"),m.opacity);
+        gl.uniform3f(this._uloc(pg,"uAmbient"),amb[0],amb[1],amb[2]);
+        gl.uniform3f(this._uloc(pg,"uDirDir"),dirDir[0],dirDir[1],dirDir[2]);
+        gl.uniform3f(this._uloc(pg,"uDirColor"),dirCol[0],dirCol[1],dirCol[2]);
+        gl.uniform3fv(this._uloc(pg,"uPLPos[0]"),plPos);
+        gl.uniform3fv(this._uloc(pg,"uPLCol[0]"),plCol);
+        gl.uniform2fv(this._uloc(pg,"uPLID[0]"),plID);
+        gl.uniform1i(this._uloc(pg,"uPLN"),pts.length);
+        this._fog(pg,m,fog);
+        const g=o.geometry, n=g.attributes.position.count, on=[];
+        on.push(this._bind(pg,"position",g.attributes.position,3));
+        if(g.attributes.normal) on.push(this._bind(pg,"normal",g.attributes.normal,3));
+        if(g.attributes.uv) on.push(this._bind(pg,"uv",g.attributes.uv,2));
+        gl.drawArrays(gl.TRIANGLES,0,n);
+        this.stats.tris+=Math.floor(n/3);
+        on.forEach((l)=>{ if(l>=0) gl.disableVertexAttribArray(l); });
+      }else if(o.isMesh&&m.isMeshBasic){
+        const pg=this._pBasic; gl.useProgram(pg.h);
+        const c=hexRGB(m.color);
+        gl.uniformMatrix4fv(this._uloc(pg,"uProj"),false,P);
+        gl.uniformMatrix4fv(this._uloc(pg,"uView"),false,V);
+        gl.uniformMatrix4fv(this._uloc(pg,"uModel"),false,MW);
+        gl.uniform3f(this._uloc(pg,"uColor"),c[0],c[1],c[2]);
+        gl.uniform1f(this._uloc(pg,"uOpacity"),m.opacity);
+        if(m.map){ gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,this._texFor(m.map));
+          gl.uniform1i(this._uloc(pg,"uMap"),0); gl.uniform1f(this._uloc(pg,"uUseMap"),1);
+        }else gl.uniform1f(this._uloc(pg,"uUseMap"),0);
+        this._fog(pg,m,fog);
+        const g=o.geometry, n=g.attributes.position.count, on=[];
+        on.push(this._bind(pg,"position",g.attributes.position,3));
+        if(g.attributes.uv) on.push(this._bind(pg,"uv",g.attributes.uv,2));
+        gl.drawArrays(gl.TRIANGLES,0,n);
+        this.stats.tris+=Math.floor(n/3);
+        on.forEach((l)=>{ if(l>=0) gl.disableVertexAttribArray(l); });
+      }else if(o.isLine){
+        const pg=this._pLine; gl.useProgram(pg.h);
+        const c=hexRGB(m.color);
+        gl.uniformMatrix4fv(this._uloc(pg,"uProj"),false,P);
+        gl.uniformMatrix4fv(this._uloc(pg,"uView"),false,V);
+        gl.uniformMatrix4fv(this._uloc(pg,"uModel"),false,MW);
+        gl.uniform3f(this._uloc(pg,"uColor"),c[0],c[1],c[2]);
+        gl.uniform1f(this._uloc(pg,"uOpacity"),m.opacity);
+        this._fog(pg,m,fog);
+        const g=o.geometry, n=g.attributes.position.count, on=[];
+        on.push(this._bind(pg,"position",g.attributes.position,3));
+        if(m.vertexColors&&g.attributes.color){
+          on.push(this._bind(pg,"color",g.attributes.color,3));
+          gl.uniform1f(this._uloc(pg,"uUseVC"),1);
+        }else gl.uniform1f(this._uloc(pg,"uUseVC"),0);
+        gl.drawArrays(gl.LINES,0,n);
+        on.forEach((l)=>{ if(l>=0) gl.disableVertexAttribArray(l); });
+      }else if(o.isSprite){
+        const pg=this._pSprite; gl.useProgram(pg.h);
+        gl.uniformMatrix4fv(this._uloc(pg,"uProj"),false,P);
+        gl.uniformMatrix4fv(this._uloc(pg,"uView"),false,V);
+        gl.uniform3f(this._uloc(pg,"uCenter"),MW[12],MW[13],MW[14]);
+        const sx=Math.sqrt(MW[0]*MW[0]+MW[1]*MW[1]+MW[2]*MW[2]);
+        const sy=Math.sqrt(MW[4]*MW[4]+MW[5]*MW[5]+MW[6]*MW[6]);
+        gl.uniform2f(this._uloc(pg,"uScale"),sx,sy);
+        gl.uniform3f(this._uloc(pg,"uRight"),right[0],right[1],right[2]);
+        gl.uniform3f(this._uloc(pg,"uUp"),up[0],up[1],up[2]);
+        const c=hexRGB(m.color);
+        gl.uniform3f(this._uloc(pg,"uColor"),c[0],c[1],c[2]);
+        gl.uniform1f(this._uloc(pg,"uOpacity"),m.opacity);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,this._texFor(m.map));
+        gl.uniform1i(this._uloc(pg,"uMap"),0);
+        this._fog(pg,m,fog);
+        const on=[];
+        let loc=this._aloc(pg,"corner");
+        gl.bindBuffer(gl.ARRAY_BUFFER,this._qPos); gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0); on.push(loc);
+        loc=this._aloc(pg,"uv");
+        gl.bindBuffer(gl.ARRAY_BUFFER,this._qUv); gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0); on.push(loc);
+        gl.drawArrays(gl.TRIANGLES,0,6);
+        on.forEach((l)=>{ if(l>=0) gl.disableVertexAttribArray(l); });
+      }else if(o.isPoints){
+        const pg=this._pPoints; gl.useProgram(pg.h);
+        const c=hexRGB(m.color);
+        gl.uniformMatrix4fv(this._uloc(pg,"uProj"),false,P);
+        gl.uniformMatrix4fv(this._uloc(pg,"uView"),false,V);
+        gl.uniformMatrix4fv(this._uloc(pg,"uModel"),false,MW);
+        gl.uniform3f(this._uloc(pg,"uColor"),c[0],c[1],c[2]);
+        gl.uniform1f(this._uloc(pg,"uOpacity"),m.opacity);
+        gl.uniform1f(this._uloc(pg,"uSize"),m.size);
+        gl.uniform1f(this._uloc(pg,"uPScale"),pScale);
+        this._fog(pg,m,fog);
+        const g=o.geometry, n=g.attributes.position.count, on=[];
+        on.push(this._bind(pg,"position",g.attributes.position,3));
+        gl.drawArrays(gl.POINTS,0,n);
+        on.forEach((l)=>{ if(l>=0) gl.disableVertexAttribArray(l); });
+      }
+    }
+  }
+}
+
+return {
+  Vector3:Vector3, Color:Color, Euler:Euler, Quaternion:Quaternion, Matrix4:Matrix4,
+  Object3D:Object3D, Group:Group, Mesh:Mesh, LineSegments:LineSegments, Points:Points, Sprite:Sprite,
+  Scene:Scene, AmbientLight:AmbientLight, DirectionalLight:DirectionalLight, PointLight:PointLight,
+  Fog:Fog, PerspectiveCamera:PerspectiveCamera,
+  BufferAttribute:BufferAttribute, BufferGeometry:BufferGeometry,
+  BoxGeometry:BoxGeometry, PlaneGeometry:PlaneGeometry, CylinderGeometry:CylinderGeometry,
+  ConeGeometry:ConeGeometry, SphereGeometry:SphereGeometry, TorusGeometry:TorusGeometry,
+  OctahedronGeometry:OctahedronGeometry, EdgesGeometry:EdgesGeometry, GridHelper:GridHelper,
+  MeshStandardMaterial:MeshStandardMaterial, MeshBasicMaterial:MeshBasicMaterial,
+  LineBasicMaterial:LineBasicMaterial, SpriteMaterial:SpriteMaterial, PointsMaterial:PointsMaterial,
+  CanvasTexture:CanvasTexture, WebGLRenderer:WebGLRenderer,
+  FrontSide:FrontSide, BackSide:BackSide, DoubleSide:DoubleSide,
+  NormalBlending:NormalBlending, AdditiveBlending:AdditiveBlending, sRGBEncoding:sRGBEncoding
+};
+})();
+</script>
+
+<script id="app">
+"use strict";
+/* ============================================================
+   VIRTUALIZATION · AN INTERACTIVE LECTURE
+   Reversible figure states driven by scroll, keys, and scrubber.
+   Fully self-contained: MiniGL renders offline; no CDN required.
+   ============================================================ */
+
+/* ---------------- lesson content (formal register) ---------------- */
+const CHAPTERS = [
+{ id:"what", tab:"Concept", name:"What is Virtualization?", acc:"#2f5d8a",
+  cam:[[9.5,6.0,11.5],[0,2.2,0]],
+  steps:[
+   { t:"A single machine, a single workload",
+     b:"In a traditional deployment, each physical server runs one operating system and one application. Processor utilization in such environments typically remains between 5 and 15 percent, while power, cooling, and floor space are consumed in full.",
+     pts:["One operating system and workload per server","Typical utilization: 5\u201315% of capacity","Idle capacity still incurs full operating cost"],
+     cap:"One physical server running a single workload at 12% utilization." },
+   { t:"Abstraction: decoupling software from hardware",
+     b:"Virtualization introduces a software layer that abstracts processors, memory, storage, and network interfaces into a unified resource pool. Workloads are thereby decoupled from specific physical components.",
+     pts:["Physical resources are pooled and shared","Software consumes virtual CPUs, memory, and disks","An extension of the abstraction an OS already provides"],
+     cap:"Physical hardware is abstracted into a pooled set of resources." },
+   { t:"Multiple virtual machines on a single host",
+     b:"From the pooled resources, several isolated virtual machines may be provisioned. Each virtual machine operates under the assumption that it possesses dedicated hardware, while all share one physical server.",
+     pts:["Each VM runs its own OS and applications","VMs share hardware yet remain mutually unaware","Utilization commonly rises to 60\u201380%"],
+     cap:"Three isolated virtual machines share a single physical server." },
+   { t:"Isolation and portability",
+     b:"Each virtual machine is sealed from its neighbours and exists entirely as software \u2014 a set of files. A VM may therefore be suspended, cloned, snapshotted, or relocated to another host without affecting the others.",
+     pts:["Faults and intrusions are contained within one VM","VMs are files: copy, snapshot, and migrate them","Hardware failure need not interrupt the workload"],
+     cap:"One virtual machine is highlighted, isolated from its neighbours." }
+  ]},
+{ id:"create", tab:"VM Creation", name:"Creating a Virtual Machine", acc:"#6b5b95",
+  cam:[[8.5,6.5,12.0],[0,2.5,0]],
+  steps:[
+   { t:"The hypervisor: a mediating layer",
+     b:"Deployment begins with the hypervisor, a thin layer on the host that governs the physical hardware. Every allocation of processor time and memory passes through it, guaranteeing fair distribution and strict separation.",
+     pts:["Resides between hardware and all VMs","Schedules virtual CPUs onto physical cores","Enforces isolation and equitable sharing"],
+     cap:"Host hardware governed by the hypervisor layer." },
+   { t:"Provisioning virtual hardware",
+     b:"A virtual machine is specified as one would specify a physical computer \u2014 a number of virtual CPUs, an allocation of memory, and a virtual disk. No hardware is installed; the hypervisor reserves portions of the pool and presents them as devices.",
+     pts:["vCPU, vRAM, and vDisk are reservations, not devices","Resources may be over-committed, with caution","The VM exists initially as a definition and disk files"],
+     cap:"Virtual CPU, memory, and disk are allocated to the new VM." },
+   { t:"Installing the guest operating system",
+     b:"An installation image is attached, and any compatible operating system may be installed within the VM. The guest proceeds as though it alone occupies physical hardware; privileged operations are translated transparently by the hypervisor.",
+     pts:["Guest OS is independent of the host OS","Heterogeneous systems coexist on one host","Drivers address virtualized devices"],
+     cap:"A guest operating system image is installed into the VM." },
+   { t:"Booting a software-defined computer",
+     b:"Once powered on, the virtual machine starts precisely as a physical computer would. Applications are installed, snapshots may be taken before hazardous procedures, and the system may be cloned or migrated live to another host.",
+     pts:["Boots and operates indistinguishably from hardware","Snapshots permit instant restoration","Cloning deploys identical systems at scale"],
+     cap:"The virtual machine boots and runs applications." }
+  ]},
+{ id:"types", tab:"Hypervisors", name:"Types of Hypervisors", acc:"#9a7420",
+  cam:[[0,7.5,14.5],[0,2.2,0]],
+  steps:[
+   { t:"Type 1: the bare-metal hypervisor",
+     b:"A Type-1 hypervisor executes directly on the hardware with no intervening host operating system. Guests reside one thin layer above the silicon, which is why production clouds and datacenters standardize on Type 1.",
+     pts:["Examples: ESXi, Hyper-V, KVM, Xen","Minimal overhead with maximum performance","Standard for servers, clouds, and datacenters"],
+     cap:"Hardware, hypervisor, virtual machines \u2014 with no layer between." },
+   { t:"Type 2: the hosted hypervisor",
+     b:"A Type-2 hypervisor runs as software within a conventional operating system. It is convenient and accessible, but each guest request traverses two layers \u2014 the hypervisor and the underlying host OS.",
+     pts:["Examples: VirtualBox, VMware Workstation, Parallels","Installs as an ordinary application","The additional layer introduces overhead"],
+     cap:"Hardware, host OS, hypervisor, virtual machines \u2014 the hosted stack." },
+   { t:"Comparison and selection",
+     b:"Type 1 prevails in performance and scale; Type 2 prevails in simplicity and accessibility. The governing principle is that fewer layers yield faster guests, while hardware-assisted virtualization continues to narrow the difference.",
+     pts:["Performance-critical or multi-tenant systems: Type 1","Study, development, and demonstration: Type 2","VT-x and AMD-V reduce the overhead gap"],
+     cap:"Both architectures compared directly." }
+  ]},
+{ id:"net", tab:"Networks", name:"Network & Service Virtualization", acc:"#3f7a5e",
+  cam:[[10.0,7.0,11.0],[0,2.6,0]],
+  steps:[
+   { t:"The physical underlay",
+     b:"Conventionally, servers are interconnected by physical switches, routers, and cabling, each provisioned manually. Relocating a workload requires physical reconfiguration of the infrastructure.",
+     pts:["Switches and routers are fixed physical devices","Changes require manual intervention and outages","Topology is constrained by installed cabling"],
+     cap:"Servers interconnected by fixed physical switches and cabling." },
+   { t:"The virtual overlay",
+     b:"Network virtualization constructs complete networks \u2014 switches, VLANs, firewalls \u2014 in software above the physical equipment. An isolated network for an entire laboratory may be created in seconds and removed when no longer required.",
+     pts:["Virtual switches operate within the hypervisor","VLANs and VXLANs isolate traffic in software","SDN controllers administer the fabric centrally"],
+     cap:"A virtual switch and VLANs are established above the hardware." },
+   { t:"Network functions as software",
+     b:"Load balancers, firewalls, and VPN gateways cease to be dedicated appliances and become virtual functions provisioned like virtual machines. Increased demand is met by instantiating further copies rather than procuring hardware.",
+     pts:["NFV: network functions as virtual appliances","Capacity scales through instantiation, not procurement","Services chain in sequence: firewall, balancer, application"],
+     cap:"Virtual firewall, load balancer, and VPN services in operation." },
+   { t:"Policy-directed traffic",
+     b:"With the infrastructure defined in software, routing follows policy rather than physical connection. Traffic traverses the virtual paths, and when a VM is relocated, its network, rules, and address accompany it automatically.",
+     pts:["Policy is bound to the workload itself","Migration carries the network with the VM","Micro-segmentation assigns each VM its own firewall"],
+     cap:"Traffic flows along policy-defined virtual paths." }
+  ]},
+{ id:"cost", tab:"Cost", name:"The Cost of Virtualization", acc:"#b0512c",
+  cam:[[8.0,6.8,12.5],[0,2.6,0]],
+  steps:[
+   { t:"The baseline: server sprawl",
+     b:"Prior to virtualization, facilities accumulated single-purpose servers \u2014 one for mail, one for the web, one for files \u2014 each serving one workload at roughly a tenth of its capacity while drawing full power.",
+     pts:["One workload per physical machine","Capacity wasted while power is fully consumed","Each server maintained, cooled, and refreshed separately"],
+     cap:"Six single-purpose servers operating at low utilization." },
+   { t:"Consolidation",
+     b:"The principal economy is consolidation: the workloads of many ageing servers execute on a single modern host. Fewer machines require less space, power, cooling, and replacement expenditure; ratios of ten to one are commonplace.",
+     pts:["Typical consolidation ratios of 8:1 to 15:1","Reduced power, cooling, space, and waste","Fewer hosts to administer and maintain"],
+     cap:"Six underused servers consolidated onto two hosts." },
+   { t:"The overhead of virtualization",
+     b:"The hypervisor consumes processor and memory resources of its own, and virtualized I/O introduces latency \u2014 generally a single-digit percentage. License fees and staff training constitute further explicit costs.",
+     pts:["Approximately 2\u201310% processor overhead with added I/O latency","Enterprise capabilities licensed per host or processor","Personnel must be trained on the platform"],
+     cap:"Overhead and licensing costs represented on the hosts." },
+   { t:"Total cost of ownership",
+     b:"Total cost of ownership weighs licenses, overhead, and training against avoided expenditure on hardware, power, space, and downtime. At any substantial scale, the economies decisively outweigh the costs \u2014 the reason virtualization dominates the datacenter.",
+     pts:["Capital expenditure falls: fewer servers purchased","Operating expenditure falls: power, space, administration","Downtime falls: high availability and live migration"],
+     cap:"Economies outweigh costs on the balance." },
+   { t:"Conclusion",
+     b:"Virtualization should be the default, with bare metal reserved for ultra-low-latency trading, high-performance computing, or workloads demanding the whole of a GPU. The disciplined approach is constant: virtualize, measure, and then decide.",
+     pts:["Virtualize by default; measure continuously","Bare metal retained for HPC, HFT, and select GPU loads","Device passthrough steadily narrows the exceptions"],
+     cap:"The conclusion: virtualize by default, with measured exceptions." }
+  ]}
+];
+
+/* flattened step index + chapter ranges */
+const FLAT=[]; const CH_START=[];
+CHAPTERS.forEach((c,ci)=>{ CH_START.push(FLAT.length); c.steps.forEach((s,li)=>FLAT.push({c:ci,l:li})); });
+const N = FLAT.length;
+const BUILD="2026.09.16-L";
+const REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------------- academic figure palette ---------------- */
+const PAPER=0xf4efe3, INK=0x2a2f3a;
+const STEEL=0x2f5d8a, PLUM=0x6b5b95, BRASS=0xa8802f, SAGE=0x3f7a5e, BRICK=0xb0512c, AMBER=0xc07f2a;
+const SERV=0xdde2ea, HOSTC=0xd3d9e3, HARDC=0xc6ccd8, CARDW=0xfbf8f1;
+function hex(n){ return "#"+("000000"+n.toString(16)).slice(-6); }
+
+/* ---------------- tiny math + figure helpers ---------------- */
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const S=(t,a,b)=>{ const x=clamp((t-a)/(b-a),0,1); return x*x*(3-2*x); };
+const L=(a,b,k)=>a+(b-a)*k;
+const tmpV=new THREE.Vector3();
+
+function mat(color,o){
+  o=o||{};
+  const m=new THREE.MeshStandardMaterial({
+    color:color, roughness:(o.rough!==undefined?o.rough:0.62),
+    metalness:(o.metal!==undefined?o.metal:0.12),
+    transparent:true, opacity:(o.opacity!==undefined?o.opacity:1),
+    emissive:(o.e!==undefined?o.e:0x000000), emissiveIntensity:(o.ei!==undefined?o.ei:1)
+  });
+  m.userData.baseOpacity=(o.opacity!==undefined?o.opacity:1);
+  return m;
+}
+function lineMat(color,op){
+  const m=new THREE.LineBasicMaterial({color:color,transparent:true,opacity:(op===undefined?0.6:op)});
+  m.userData.baseOpacity=(op===undefined?0.6:op);
+  return m;
+}
+function bx(w,h,d,material,edge,edgeOp){
+  const g=new THREE.Group();
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);
+  g.add(mesh);
+  if(edge!==null&&edge!==undefined){
+    const e=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),lineMat(edge,edgeOp===undefined?0.55:edgeOp));
+    mesh.add(e);
+  }
+  g.userData.mesh=mesh;
+  return g;
+}
+function roundRectPath(x,px,py,w,h,r){
+  x.beginPath();x.moveTo(px+r,py);
+  x.arcTo(px+w,py,px+w,py+h,r);x.arcTo(px+w,py+h,px,py+h,r);
+  x.arcTo(px,py+h,px,py,r);x.arcTo(px,py,px+w,py,r);x.closePath();
+}
+/* floating annotation tag: white card, ink text */
+function makeLabel(text,o){
+  o=o||{};
+  const fs=o.fs||56, pad=o.pad||30;
+  const c=document.createElement("canvas");
+  let x=c.getContext("2d");
+  x.font="600 "+fs+"px Inter, Arial, sans-serif";
+  const w=Math.ceil(x.measureText(text).width)+pad*2, h=fs+pad*1.6;
+  c.width=w*2; c.height=h*2; x=c.getContext("2d"); x.scale(2,2);
+  const r=h/2-3;
+  x.fillStyle=o.bg||"rgba(255,255,255,0.95)";
+  roundRectPath(x,2,2,w-4,h-4,r); x.fill();
+  x.strokeStyle=o.border||"rgba(42,47,58,0.35)"; x.lineWidth=2.5;
+  roundRectPath(x,3,3,w-6,h-6,r-1); x.stroke();
+  x.font="600 "+fs+"px Inter, Arial, sans-serif"; x.textBaseline="middle";
+  x.fillStyle=o.color||"#232838"; x.fillText(text,pad,h/2+2);
+  const tex=new THREE.CanvasTexture(c); tex.anisotropy=4;
+  const m=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false});
+  const op=(o.opacity!==undefined?o.opacity:1);
+  m.userData.baseOpacity=op; m.opacity=op;
+  const s=new THREE.Sprite(m);
+  const H=o.h||0.5; s.scale.set(H*w/h,H,1);
+  s.renderOrder=10;
+  return s;
+}
+function tag(text,accent,o){
+  o=o||{}; o.border=hex(accent===undefined?INK:accent); return makeLabel(text,o);
+}
+let _glowTex=null;
+function glowTex(){
+  if(_glowTex) return _glowTex;
+  const c=document.createElement("canvas"); c.width=c.height=128;
+  const x=c.getContext("2d");
+  const g=x.createRadialGradient(64,64,0,64,64,64);
+  g.addColorStop(0,"rgba(255,255,255,0.9)");g.addColorStop(0.4,"rgba(255,255,255,0.35)");g.addColorStop(1,"rgba(255,255,255,0)");
+  x.fillStyle=g; x.fillRect(0,0,128,128);
+  _glowTex=new THREE.CanvasTexture(c); return _glowTex;
+}
+function glowSprite(color,size,op){
+  op=(op===undefined?0.5:op);
+  const m=new THREE.SpriteMaterial({map:glowTex(),color:color,transparent:true,opacity:op,depthWrite:false});
+  m.userData.baseOpacity=op;
+  const s=new THREE.Sprite(m); s.scale.set(size,size,1); return s;
+}
+function tube(a,b,r,material){
+  const d=new THREE.Vector3().subVectors(b,a); const len=d.length();
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,10),material);
+  m.position.copy(a).addScaledVector(d,0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());
+  return m;
+}
+function points(n,color,size,ax,ay,az){
+  const g=new THREE.BufferGeometry();
+  const p=new Float32Array(n*3), seed=new Float32Array(n);
+  for(let i=0;i<n;i++){ p[i*3]=(Math.random()-0.5)*ax; p[i*3+1]=(Math.random()-0.5)*ay; p[i*3+2]=(Math.random()-0.5)*az; seed[i]=Math.random(); }
+  g.setAttribute("position",new THREE.BufferAttribute(p,3));
+  const m=new THREE.PointsMaterial({color:color,size:size,transparent:true,opacity:0,depthWrite:false});
+  m.userData.baseOpacity=0;
+  const pts=new THREE.Points(g,m);
+  pts.userData={base:p.slice(),seed:seed,n:n};
+  pts.frustumCulled=false; pts.visible=false;
+  return pts;
+}
+function driftPoints(pts,time,speed,range,dir){
+  const attr=pts.geometry.attributes.position, u=pts.userData;
+  for(let i=0;i<u.n;i++){
+    const s=u.seed[i];
+    attr.array[i*3]=u.base[i*3]+Math.sin(time*1.4+s*6.28)*0.22;
+    const ph=(time*speed+s*range)%range;
+    attr.array[i*3+1]=u.base[i*3+1]+(dir<0?-ph:ph)-range/2*(dir<0?-1:1);
+    attr.array[i*3+2]=u.base[i*3+2]+Math.cos(time*1.1+s*6.28)*0.22;
+  }
+  attr.needsUpdate=true;
+}
+function setDim(obj,f){
+  obj.traverse((o)=>{
+    if(o.material){
+      const ms=Array.isArray(o.material)?o.material:[o.material];
+      for(let i=0;i<ms.length;i++) ms[i].userData.dim=f;
+    }
+  });
+}
+function applyFade(group,k){
+  group.traverse((o)=>{
+    if(o.material){
+      const ms=Array.isArray(o.material)?o.material:[o.material];
+      for(let i=0;i<ms.length;i++){
+        const m=ms[i];
+        if(m.userData.baseOpacity!==undefined)
+          m.opacity=m.userData.baseOpacity*k*(m.userData.dim===undefined?1:m.userData.dim);
+      }
+    }
+  });
+}
+
+/* ============================================================
+   CHAPTER FIGURES — each returns {group, update(t,time)}
+   t = continuous local step (reversible), time = seconds
+   ============================================================ */
+function buildCH0(){
+  const g=new THREE.Group();
+  const back=glowSprite(0xdfe6ee,17,0.6); back.position.set(0,3,-5); g.add(back);
+  const host=bx(6.4,1.1,3.2,mat(HOSTC,{metal:0.25,rough:0.5}),INK,0.5);
+  host.position.set(0,0.55,0); g.add(host);
+  const plate=bx(6.4,0.08,3.2,mat(STEEL,{e:STEEL,ei:0.35}),null);
+  plate.position.set(0,1.14,0); g.add(plate);
+  const hostLbl=tag("PHYSICAL SERVER",STEEL,{h:0.42,fs:48});
+  hostLbl.position.set(0,0.40,2.15); g.add(hostLbl);
+
+  const before=new THREE.Group(); g.add(before);
+  const one=bx(2.2,1.6,2.2,mat(0xe4c98f,{e:AMBER,ei:0.15}),INK,0.5);
+  one.position.set(0,1.98,0); before.add(one);
+  const oneCap=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.1,2.2),mat(AMBER,{e:AMBER,ei:0.4}));
+  oneCap.position.y=0.85; one.add(oneCap);
+  const oneLbl=tag("1 App \u00B7 1 OS",AMBER,{h:0.4});
+  oneLbl.position.set(0,3.2,0); before.add(oneLbl);
+  const barBg=bx(4.6,0.16,0.16,mat(0xcfd4dd),null);
+  barBg.position.set(0,3.7,0); before.add(barBg);
+  const fill=new THREE.Mesh(new THREE.BoxGeometry(4.6*0.12,0.22,0.22),mat(AMBER,{e:AMBER,ei:0.5}));
+  fill.position.set(-4.6/2+4.6*0.12/2,3.7,0); before.add(fill);
+  const capLbl=tag("CPU 12% \u2014 88% IDLE",AMBER,{h:0.42});
+  capLbl.position.set(0,4.28,0); before.add(capLbl);
+
+  const pool=new THREE.Group(); g.add(pool);
+  const bars=[];
+  const defs=[["CPU",STEEL,2.3,-1.7],["RAM",PLUM,1.8,0],["DISK",BRASS,1.35,1.7]];
+  defs.forEach((d)=>{
+    const m=mat(d[1],{e:d[1],ei:0.35});
+    const b=bx(0.9,d[2],0.9,m,INK,0.5); b.position.set(d[3],1.18,0); pool.add(b);
+    const l=tag(d[0],d[1],{h:0.36}); l.position.set(d[3],1.6,0); pool.add(l);
+    bars.push({b:b,l:l,h:d[2]});
+  });
+  const poolLbl=tag("RESOURCE POOL",STEEL,{h:0.44});
+  poolLbl.position.set(0,4.55,0); pool.add(poolLbl);
+
+  const vms=new THREE.Group(); g.add(vms);
+  const vmObjs=[];
+  const vmDefs=[[STEEL,"VM-1 \u00B7 WEB",-2.3],[PLUM,"VM-2 \u00B7 DB",0],[SAGE,"VM-3 \u00B7 LAB",2.3]];
+  vmDefs.forEach((d,i)=>{
+    const m=mat(CARDW,{e:d[0],ei:0.12});
+    const v=bx(1.75,1.35,1.75,m,INK,0.55); v.position.set(d[2],1.0,0); vms.add(v);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.12,1.7),mat(d[0],{e:d[0],ei:0.5}));
+    cap.position.y=0.72; v.add(cap);
+    const l=tag(d[1],d[0],{h:0.36}); l.position.set(d[2],1.0,0); vms.add(l);
+    const cm=mat(0x6b7484,{opacity:0});
+    const conn=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,1,8),cm);
+    conn.position.set(d[2],1.5,0); vms.add(conn);
+    vmObjs.push({v:v,l:l,conn:conn,cm:cm,x:d[2],i:i,lBase:l.scale.clone()});
+  });
+
+  const shieldMat=mat(SAGE,{e:SAGE,ei:0.7,opacity:0});
+  const shield=new THREE.Mesh(new THREE.TorusGeometry(1.32,0.07,12,64),shieldMat);
+  shield.position.set(0,3.1,0); shield.rotation.x=Math.PI/2.4; g.add(shield);
+  const isoLbl=tag("ISOLATED",SAGE,{h:0.44,opacity:0});
+  isoLbl.position.set(0,4.6,0); g.add(isoLbl);
+
+  function update(t,time){
+    const kBefore=1-S(t,0.35,1.0);
+    setDim(before,Math.max(0.001,kBefore)); before.visible=kBefore>0.02;
+    const kPool=S(t,0.45,1.0)*(1-S(t,1.4,1.9));
+    pool.visible=kPool>0.02;
+    setDim(pool,Math.max(0.001,kPool));
+    bars.forEach((o,i)=>{
+      const kk=S(t,0.45+i*0.1,0.75+i*0.1)*(1-S(t,1.4,1.9));
+      o.b.scale.y=Math.max(0.001,kk);
+      o.b.position.y=1.18+(o.h*kk)/2;
+      o.b.visible=kk>0.02; o.l.visible=kk>0.35;
+      o.l.position.y=1.18+o.h*kk+0.35;
+    });
+    const kVm=S(t,1.3,1.9);
+    vms.visible=kVm>0.02;
+    vmObjs.forEach((o)=>{
+      const y=L(0.9,2.95,kVm)+Math.sin(time*1.3+o.i*2.1)*0.07*kVm;
+      o.v.position.y=y;
+      o.l.position.set(o.x,y+1.15,0);
+      o.l.scale.copy(o.lBase).multiplyScalar(0.3+0.7*kVm);
+      const hgt=Math.max(0.05,y-1.2);
+      o.conn.scale.y=hgt; o.conn.position.y=1.2+hgt/2;
+      o.cm.userData.baseOpacity=0.7*kVm;
+      o.v.scale.setScalar(Math.max(0.001,0.3+0.7*kVm));
+    });
+    const kIso=S(t,2.5,2.95);
+    const mid=vmObjs[1];
+    mid.v.scale.setScalar(Math.max(0.001,(0.3+0.7*kVm)*(1+0.22*kIso)));
+    mid.v.position.y+=0.5*kIso; mid.l.position.y+=0.5*kIso;
+    shieldMat.userData.baseOpacity=0.95*kIso;
+    shield.position.y=mid.v.position.y;
+    shield.rotation.z=time*0.9;
+    isoLbl.material.userData.baseOpacity=kIso;
+    setDim(vmObjs[0].v,1-0.55*kIso); setDim(vmObjs[0].l,1-0.55*kIso);
+    setDim(vmObjs[2].v,1-0.55*kIso); setDim(vmObjs[2].l,1-0.55*kIso);
+    setDim(mid.v,1); setDim(mid.l,1); setDim(shield,1); setDim(isoLbl,1);
+  }
+  return {group:g,update:update,back:back};
+}
+
+function buildCH1(){
+  const g=new THREE.Group();
+  const back=glowSprite(0xe3dded,17,0.6); back.position.set(0,3,-5); g.add(back);
+  const host=bx(5.6,1.0,3.0,mat(HOSTC,{metal:0.25,rough:0.5}),INK,0.5);
+  host.position.set(0,0.5,0); g.add(host);
+  const hypMat=mat(PLUM,{e:PLUM,ei:0.5,opacity:0});
+  const hyp=new THREE.Mesh(new THREE.BoxGeometry(5.6,0.22,3.0),hypMat);
+  hyp.position.set(0,1.11,0); g.add(hyp);
+  const hypLbl=tag("HYPERVISOR",PLUM,{h:0.42,opacity:0});
+  hypLbl.position.set(0,1.2,2.35); g.add(hypLbl);
+  const hostLbl=tag("HOST HARDWARE",STEEL,{h:0.4});
+  hostLbl.position.set(0,0.38,2.0); g.add(hostLbl);
+
+  const wireMat=lineMat(PLUM,0);
+  const wire=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2.5,1.9,2.5)),wireMat);
+  wire.position.set(0,2.6,0); g.add(wire);
+  const glassMat=mat(0xb9c6d8,{opacity:0,rough:0.4,metal:0.05});
+  const glass=new THREE.Mesh(new THREE.BoxGeometry(2.5,1.9,2.5),glassMat);
+  glass.position.copy(wire.position); g.add(glass);
+
+  const chipDefs=[
+    ["vCPU \u00D74",STEEL,new THREE.Vector3(-4.6,4.6,-1.2),0xd7e3f2],
+    ["vRAM 16G",BRASS,new THREE.Vector3(4.6,4.2,0.8),0xece0c2],
+    ["vDISK 100G",SAGE,new THREE.Vector3(0.4,5.4,-3.4),0xd4e5d8]
+  ];
+  const ends=[new THREE.Vector3(-0.7,2.15,0.2),new THREE.Vector3(0.05,2.6,0.2),new THREE.Vector3(0.75,3.05,0.2)];
+  const chips=chipDefs.map((d,i)=>{
+    const m=mat(d[3],{e:d[1],ei:0.15,opacity:0});
+    const b=bx(1.15,0.42,0.7,m,INK,0.5); b.position.copy(d[2]); b.visible=false; g.add(b);
+    const stripe=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.08,0.7),mat(d[1],{e:d[1],ei:0.4,opacity:0}));
+    stripe.position.y=0.25; b.add(stripe);
+    const l=tag(d[0],d[1],{h:0.32,opacity:0}); l.position.copy(d[2]); l.visible=false; g.add(l);
+    return {b:b,l:l,m:m,sm:stripe.material,start:d[2],end:ends[i],i:i};
+  });
+
+  const discMat=mat(BRASS,{e:BRASS,ei:0.4,opacity:0});
+  const disc=new THREE.Mesh(new THREE.CylinderGeometry(0.95,0.95,0.12,36),discMat);
+  disc.position.set(0,5.6,0); g.add(disc);
+  const discLbl=tag("GUEST OS \u00B7 ISO",BRASS,{h:0.4,opacity:0});
+  discLbl.position.set(0,6.4,0); g.add(discLbl);
+
+  const apps=[[STEEL,-0.75],[SAGE,0],[AMBER,0.75]].map((d,i)=>{
+    const a=bx(0.52,0.52,0.52,mat(d[0],{e:d[0],ei:0.4}),INK,0.5);
+    a.position.set(d[1],3.85,0); a.scale.setScalar(0.001); a.visible=false; g.add(a);
+    return {a:a,i:i};
+  });
+  const runLbl=tag("RUNNING",SAGE,{h:0.46,opacity:0});
+  runLbl.position.set(0,4.7,0); g.add(runLbl);
+  const boot=glowSprite(0xd7e3f2,5.5,0); boot.position.set(0,2.7,0); g.add(boot);
+  const bootLight=new THREE.PointLight(STEEL,0,18); bootLight.position.set(0,3.4,1.5); g.add(bootLight);
+  const parts=points(90,STEEL,0.09,4,2.4,4); parts.position.set(0,3.4,0); g.add(parts);
+
+  function update(t,time){
+    hypMat.userData.baseOpacity=S(t,-0.8,-0.1);
+    hypLbl.material.userData.baseOpacity=S(t,-0.6,0.0);
+    const kW=S(t,0.1,0.5);
+    wireMat.userData.baseOpacity=0.95*kW;
+    wire.scale.setScalar(Math.max(0.001,0.4+0.6*kW)); wire.visible=kW>0.02;
+    const gk=S(t,1.5,2.0);
+    glassMat.userData.baseOpacity=0.42*gk;
+    glass.scale.setScalar(Math.max(0.001,0.5+0.5*gk)); glass.visible=gk>0.02;
+    chips.forEach((ch)=>{
+      const k=S(t,0.3+ch.i*0.14,0.62+ch.i*0.14);
+      ch.b.position.lerpVectors(ch.start,ch.end,k);
+      ch.b.position.y+=Math.sin(k*Math.PI)*0.7;
+      ch.l.position.copy(ch.b.position); ch.l.position.y+=0.62;
+      const ko=S(t,0.25+ch.i*0.14,0.5+ch.i*0.14);
+      ch.m.userData.baseOpacity=ko;
+      ch.sm.userData.baseOpacity=ko;
+      ch.l.material.userData.baseOpacity=ko;
+      ch.b.visible=ko>0.02; ch.l.visible=ko>0.3;
+    });
+    const kD=S(t,1.15,1.8);
+    disc.position.y=L(5.6,3.55,kD); disc.rotation.y=time*1.2;
+    const dOp=S(t,1.1,1.35)*(1-S(t,1.75,2.0));
+    discMat.userData.baseOpacity=dOp;
+    discLbl.position.y=disc.position.y+0.85;
+    discLbl.material.userData.baseOpacity=dOp;
+    disc.visible=dOp>0.02; discLbl.visible=dOp>0.15;
+    const kB=S(t,2.5,2.95);
+    apps.forEach((a)=>{
+      const k=S(t,2.45+a.i*0.1,2.75+a.i*0.1);
+      a.a.scale.setScalar(Math.max(0.001,k));
+      a.a.position.y=3.85+Math.sin(time*2+a.i)*0.05*k;
+      a.a.visible=k>0.02;
+    });
+    runLbl.material.userData.baseOpacity=kB;
+    runLbl.position.y=4.7+Math.sin(time*1.6)*0.06;
+    boot.material.userData.baseOpacity=0.7*kB;
+    bootLight.intensity=1.4*kB;
+    parts.material.userData.baseOpacity=0.85*kB;
+    parts.visible=kB>0.02;
+    if(parts.visible) driftPoints(parts,time,0.9,3,1);
+  }
+  return {group:g,update:update,back:back};
+}
+
+function buildStack(defs,edgeColor){
+  const grp=new THREE.Group(); const layers=[]; let y=0.32;
+  defs.forEach((d)=>{
+    if(d.split){
+      const pair=[];
+      d.split.forEach((sp,k)=>{
+        const m=mat(CARDW,{e:sp[1],ei:0.12});
+        const b=bx(1.7,0.55,2.3,m,INK,0.55);
+        b.position.set(k===0?-0.9:0.9,y+0.275,0); grp.add(b);
+        const cap=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.08,2.3),mat(sp[1],{e:sp[1],ei:0.4}));
+        cap.position.y=0.31; b.add(cap);
+        const l=tag(sp[0],sp[1],{h:0.32});
+        l.position.set(k===0?-0.9:0.9,y+0.32,1.55); grp.add(l);
+        pair.push({b:b,l:l,m:m,y0:y+0.275});
+      });
+      layers.push({split:pair});
+    }else{
+      const m=mat(d.fill,{e:(d.e!==undefined?d.e:d.color),ei:(d.ei!==undefined?d.ei:0.3)});
+      const b=bx(d.w||3.6,0.55,2.3,m,INK,0.55);
+      b.position.set(0,y+0.275,0); grp.add(b);
+      const l=tag(d.label,d.accent,{h:0.34});
+      l.position.set(0,y+0.32,1.55); grp.add(l);
+      layers.push({b:b,l:l,m:m,y0:y+0.275});
+    }
+    y+=0.67;
+  });
+  const plate=bx(4.0,0.14,2.7,mat(HOSTC,{metal:0.25,rough:0.5}),INK,0.5);
+  plate.position.set(0,0.1,0); grp.add(plate);
+  return {grp:grp,layers:layers,topY:y};
+}
+function animStack(st,t,base){
+  st.layers.forEach((Ly,j)=>{
+    const k=S(t,base+j*0.14,base+j*0.14+0.4);
+    const items=Ly.split||[Ly];
+    items.forEach((it)=>{
+      it.b.position.y=it.y0-2.4*(1-k);
+      it.b.scale.y=Math.max(0.001,k);
+      it.b.visible=k>0.02;
+      it.m.userData.baseOpacity=k;
+      it.l.material.userData.baseOpacity=k;
+      it.l.visible=k>0.35;
+    });
+  });
+}
+function buildCH2(){
+  const g=new THREE.Group();
+  const back=glowSprite(0xece2c8,18,0.6); back.position.set(0,3,-5); g.add(back);
+  const T1=buildStack([
+    {label:"HARDWARE",fill:HARDC,accent:INK,e:0x000000,ei:0},
+    {label:"HYPERVISOR \u00B7 T1",fill:0xcfc6e2,accent:PLUM,e:PLUM,ei:0.25},
+    {split:[["VM-A",STEEL],["VM-B",SAGE]]}
+  ]);
+  g.add(T1.grp);
+  const T2=buildStack([
+    {label:"HARDWARE",fill:HARDC,accent:INK,e:0x000000,ei:0},
+    {label:"HOST OS",fill:0xe4c98f,accent:AMBER,e:AMBER,ei:0.2},
+    {label:"HYPERVISOR \u00B7 T2",fill:0xe0b8a6,accent:BRICK,e:BRICK,ei:0.25},
+    {split:[["VM-A",STEEL],["VM-B",SAGE]]}
+  ]);
+  g.add(T2.grp);
+  const t1Title=tag("TYPE 1 \u00B7 BARE METAL",BRASS,{h:0.44,opacity:0});
+  t1Title.position.set(0,T1.topY+0.5,0); T1.grp.add(t1Title);
+  const t1Badge=tag("DIRECT \u2014 FASTEST",STEEL,{h:0.44,opacity:0});
+  t1Badge.position.set(0,T1.topY+1.3,0); T1.grp.add(t1Badge);
+  const t2Title=tag("TYPE 2 \u00B7 HOSTED",BRICK,{h:0.44,opacity:0});
+  t2Title.position.set(0,T2.topY+0.5,0); T2.grp.add(t2Title);
+  const t2Badge=tag("EXTRA LAYER = OVERHEAD",BRICK,{h:0.42,opacity:0});
+  t2Badge.position.set(0,T2.topY+1.3,0); T2.grp.add(t2Badge);
+  const coneMat=mat(BRICK,{e:BRICK,ei:0.6,opacity:0});
+  const cone=new THREE.Mesh(new THREE.ConeGeometry(0.22,0.55,18),coneMat);
+  cone.position.set(2.6,T2.layers[1].y0,0); cone.rotation.z=Math.PI/2; T2.grp.add(cone);
+
+  function update(t,time){
+    animStack(T1,t,-0.9);
+    T1.grp.position.x=L(0,-3.6,S(t,0.15,0.95));
+    T2.grp.position.x=L(8.5,3.6,S(t,0.15,0.95));
+    T2.grp.visible=t>0.05;
+    animStack(T2,t,0.1);
+    t1Title.material.userData.baseOpacity=S(t,-0.6,-0.05);
+    t2Title.material.userData.baseOpacity=S(t,0.52,0.92);
+    const kB=S(t,1.5,1.9);
+    t1Badge.material.userData.baseOpacity=kB;
+    t2Badge.material.userData.baseOpacity=kB;
+    t1Badge.position.y=T1.topY+1.3+Math.sin(time*1.5)*0.07*kB;
+    t2Badge.position.y=T2.topY+1.3+Math.sin(time*1.5+1)*0.07*kB;
+    coneMat.userData.baseOpacity=kB;
+    const cp=1+0.18*Math.sin(time*3)*kB;
+    cone.scale.set(cp,cp,cp);
+    cone.visible=kB>0.02;
+  }
+  return {group:g,update:update,back:back};
+}
+
+function buildCH3(){
+  const g=new THREE.Group();
+  const back=glowSprite(0xd9e7dc,18,0.6); back.position.set(0,3,-5); g.add(back);
+  const phys=new THREE.Group(); g.add(phys);
+  const srvPos=[[-3.8,0.6],[0,-0.8],[3.8,0.6]];
+  const srvTop=[];
+  srvPos.forEach((p,i)=>{
+    const s=bx(1.5,2.2,1.2,mat(SERV,{metal:0.2,rough:0.55}),INK,0.5);
+    s.position.set(p[0],1.1,p[1]); phys.add(s);
+    const l=tag("SRV-"+["A","B","C"][i],STEEL,{h:0.34});
+    l.position.set(p[0],2.55,p[1]); phys.add(l);
+    srvTop.push(new THREE.Vector3(p[0],2.2,p[1]));
+  });
+  const sw=bx(2.8,0.5,1.5,mat(HARDC,{metal:0.25,rough:0.5}),INK,0.5);
+  sw.position.set(0,0.25,2.8); phys.add(sw);
+  const swLbl=tag("PHYSICAL SWITCH",INK,{h:0.34});
+  swLbl.position.set(0,0.7,3.9); phys.add(swLbl);
+  const cableMat=mat(0x8a93a3,{rough:0.7,metal:0.1});
+  srvPos.forEach((p)=>{
+    phys.add(tube(new THREE.Vector3(0,0.5,2.8),new THREE.Vector3(p[0],0.4,p[1]),0.045,cableMat));
+  });
+  const planeMat=new THREE.MeshBasicMaterial({color:STEEL,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false});
+  planeMat.userData.baseOpacity=0;
+  const plane=new THREE.Mesh(new THREE.PlaneGeometry(10,6.5),planeMat);
+  plane.rotation.x=-Math.PI/2; plane.position.set(0,3.35,0.2); g.add(plane);
+  const vsMat=mat(STEEL,{e:STEEL,ei:0.5});
+  const vsw=new THREE.Mesh(new THREE.OctahedronGeometry(0.75),vsMat);
+  vsw.position.set(0,4.0,0.2); vsw.scale.setScalar(0.001); vsw.visible=false; g.add(vsw);
+  const vsGlow=glowSprite(0xd7e3f2,3.2,0); vsGlow.position.copy(vsw.position); g.add(vsGlow);
+  const vsLbl=tag("VIRTUAL SWITCH",STEEL,{h:0.4,opacity:0});
+  vsLbl.position.set(0,5.0,0.2); g.add(vsLbl);
+  const vlanLbl=tag("VLANs \u00B7 VXLAN \u00B7 SDN",PLUM,{h:0.36,opacity:0});
+  vlanLbl.position.set(-4.7,4.1,0.2); g.add(vlanLbl);
+  const linkCols=[STEEL,PLUM,BRASS];
+  const linkMats=linkCols.map((c)=>mat(c,{e:c,ei:0.4,opacity:0}));
+  const vLow=new THREE.Vector3(0,3.6,0.2);
+  srvTop.forEach((st,i)=>{ g.add(tube(vLow,st,0.035,linkMats[i])); });
+  const ringMat=mat(SAGE,{e:SAGE,ei:0.5,opacity:0});
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(2.4,0.025,8,72),ringMat);
+  ring.rotation.x=Math.PI/2; ring.position.set(0,4.0,0.2); g.add(ring);
+  const orbDefs=[["FW",BRICK],["LB",BRASS],["VPN",PLUM]];
+  const orbs=orbDefs.map((d,i)=>{
+    const grp=new THREE.Group();
+    const m=mat(d[1],{e:d[1],ei:0.45});
+    const o=new THREE.Mesh(new THREE.SphereGeometry(0.45,22,16),m); grp.add(o);
+    const l=tag(d[0],d[1],{h:0.36}); l.position.y=0.85; grp.add(l);
+    grp.scale.setScalar(0.001); grp.visible=false; g.add(grp);
+    return {grp:grp,l:l,i:i};
+  });
+  const pktMat=mat(STEEL,{e:STEEL,ei:0.7,opacity:0});
+  const pkts=[];
+  for(let i=0;i<6;i++){
+    const p=new THREE.Mesh(new THREE.SphereGeometry(0.12,12,10),pktMat);
+    g.add(p); pkts.push({m:p,link:i%3,off:i/6,rev:i%2===1});
+  }
+  const polLbl=tag("POLICY ROUTING",BRASS,{h:0.42,opacity:0});
+  polLbl.position.set(4.7,4.4,0.2); g.add(polLbl);
+
+  function update(t,time){
+    setDim(phys,1-0.5*S(t,0.9,1.8));
+    const kV=S(t,0.35,1.0);
+    planeMat.userData.baseOpacity=0.12*kV; plane.visible=kV>0.02;
+    vsw.visible=kV>0.02;
+    vsw.scale.setScalar(Math.max(0.001,kV));
+    vsw.rotation.y=time*0.8;
+    vsw.position.y=4.0+Math.sin(time*1.4)*0.08*kV;
+    vsGlow.position.copy(vsw.position);
+    vsGlow.material.userData.baseOpacity=0.6*kV;
+    vsLbl.material.userData.baseOpacity=kV;
+    vsLbl.position.y=5.0+Math.sin(time*1.4)*0.08*kV;
+    vlanLbl.material.userData.baseOpacity=kV;
+    linkMats.forEach((m)=>{ m.userData.baseOpacity=0.9*kV; });
+    const kR=S(t,1.3,1.9);
+    ringMat.userData.baseOpacity=0.7*kR; ring.visible=kR>0.02;
+    orbs.forEach((o)=>{
+      const k=S(t,1.3+o.i*0.15,1.7+o.i*0.15);
+      const a=time*0.5+o.i*2.094;
+      o.grp.position.set(Math.cos(a)*2.4,4.0+Math.sin(time*1.2+o.i)*0.15,0.2+Math.sin(a)*1.7);
+      o.grp.scale.setScalar(Math.max(0.001,k*(1+0.06*Math.sin(time*2.4+o.i))));
+      o.grp.visible=k>0.02;
+    });
+    const kP=S(t,2.3,2.8);
+    pktMat.userData.baseOpacity=kP;
+    pkts.forEach((p)=>{
+      let f=(time*0.4+p.off)%1; if(p.rev) f=1-f;
+      p.m.position.lerpVectors(srvTop[p.link],vLow,f);
+      p.m.visible=kP>0.02;
+    });
+    polLbl.material.userData.baseOpacity=kP;
+    polLbl.position.y=4.4+Math.sin(time*1.5)*0.07*kP;
+  }
+  return {group:g,update:update,back:back};
+}
+
+function buildCH4(){
+  const g=new THREE.Group();
+  const back=glowSprite(0xeeddcf,18,0.6); back.position.set(0,3,-5); g.add(back);
+  const smalls=[];
+  for(let i=0;i<6;i++){
+    const x0=-5.2+i*2.08;
+    const s=bx(1.05,1.7,1.0,mat(HARDC,{metal:0.2,rough:0.55}),INK,0.5);
+    s.position.set(x0,0.85,-1.4); g.add(s);
+    smalls.push({s:s,x0:x0,i:i});
+  }
+  const bigs=[];
+  [[-1.7,STEEL],[1.7,SAGE]].forEach((d)=>{
+    const b=bx(1.9,2.5,1.6,mat(CARDW,{e:d[1],ei:0.1,metal:0.15}),INK,0.55);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.12,1.6),mat(BRASS,{e:BRASS,ei:0.4}));
+    cap.position.y=1.3; b.add(cap);
+    b.position.set(d[0],0,-1.4); b.scale.setScalar(0.001); b.visible=false; g.add(b);
+    bigs.push({b:b,x:d[0]});
+  });
+  const sprawlLbl=tag("6 \u00D7 IDLE SERVERS",AMBER,{h:0.42});
+  sprawlLbl.position.set(0,2.6,-1.4); g.add(sprawlLbl);
+  const bigLbl=tag("2 \u00D7 CONSOLIDATED HOSTS",BRASS,{h:0.42,opacity:0});
+  bigLbl.position.set(0,3.15,-1.4); g.add(bigLbl);
+  const saveLbl=tag("FEWER RACKS \u00B7 POWER \u00B7 COOLING",SAGE,{h:0.38,opacity:0});
+  saveLbl.position.set(0,3.7,-1.4); g.add(saveLbl);
+  const taxMat=mat(BRICK,{e:BRICK,ei:0.35,opacity:0,rough:0.4});
+  const taxes=[-1.7,1.7].map((x)=>{
+    const tx=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.42,1.7),taxMat);
+    tx.position.set(x,2.76,-1.4); tx.visible=false; g.add(tx); return tx;
+  });
+  const taxLbl=tag("HYPERVISOR TAX",BRICK,{h:0.36,opacity:0});
+  taxLbl.position.set(4.4,2.4,-1.4); g.add(taxLbl);
+  const licLbl=tag("LICENSES + TRAINING",BRICK,{h:0.36,opacity:0});
+  licLbl.position.set(-4.4,2.4,-1.4); g.add(licLbl);
+  const gauge=new THREE.Group(); gauge.position.set(0,4.6,-1.6); g.add(gauge);
+  const arcMat=mat(BRASS,{e:BRASS,ei:0.5,opacity:0});
+  const arc=new THREE.Mesh(new THREE.TorusGeometry(1.1,0.09,12,48,Math.PI),arcMat);
+  gauge.add(arc);
+  const needleMat=mat(INK,{opacity:0});
+  const needle=new THREE.Group();
+  const nd=new THREE.Mesh(new THREE.BoxGeometry(0.08,1.0,0.08),needleMat);
+  nd.position.y=0.5; needle.add(nd); gauge.add(needle);
+  const hub=new THREE.Mesh(new THREE.SphereGeometry(0.12,12,10),needleMat); gauge.add(hub);
+  const g90=tag("90",INK,{h:0.3,opacity:0}); g90.position.set(-1.75,4.55,-1.6); g.add(g90);
+  const g100=tag("100",INK,{h:0.3,opacity:0}); g100.position.set(1.75,4.55,-1.6); g.add(g100);
+  const gLbl=tag("GUEST PERFORMANCE \u224893%",BRASS,{h:0.38,opacity:0});
+  gLbl.position.set(0,6.2,-1.6); g.add(gLbl);
+  const scale=new THREE.Group(); scale.position.set(0,0,2.8); g.add(scale);
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.12,2.9,14),mat(0x6b7280,{metal:0.5,rough:0.4}));
+  pole.position.y=1.45; scale.add(pole);
+  const sbase=bx(1.2,0.15,1.2,mat(HARDC,{metal:0.3}),INK,0.5);
+  sbase.position.y=0.07; scale.add(sbase);
+  const beam=new THREE.Group(); beam.position.y=2.95; scale.add(beam);
+  const beamMesh=new THREE.Mesh(new THREE.BoxGeometry(5.4,0.14,0.14),mat(BRASS,{e:BRASS,ei:0.3,metal:0.4}));
+  beam.add(beamMesh);
+  function hanger(x){
+    const hg=new THREE.Group(); hg.position.set(x,0,0); beam.add(hg);
+    const str=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.6,8),mat(0x6b7280));
+    str.position.y=-0.3; hg.add(str);
+    const pan=new THREE.Mesh(new THREE.CylinderGeometry(0.85,0.7,0.08,26),mat(HARDC,{metal:0.4,rough:0.4}));
+    pan.position.y=-0.65; hg.add(pan);
+    return hg;
+  }
+  const hgL=hanger(-2.55), hgR=hanger(2.55);
+  [0,1].forEach((i)=>{
+    const w=bx(0.48,0.48,0.48,mat(BRICK,{e:BRICK,ei:0.3}),INK,0.5);
+    w.position.set(i===0?-0.28:0.28,-0.37,0); hgL.add(w);
+  });
+  const coins=[];
+  for(let i=0;i<4;i++){
+    const c=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.1,26),mat(BRASS,{e:BRASS,ei:0.35,metal:0.6,rough:0.35}));
+    c.position.set(0,-0.55+i*0.11,0); c.scale.setScalar(0.001); hgR.add(c); coins.push(c);
+  }
+  const costLbl=tag("COSTS",BRICK,{h:0.4,opacity:0});
+  const saveLbl2=tag("SAVINGS",BRASS,{h:0.4,opacity:0});
+  g.add(costLbl); g.add(saveLbl2);
+  const vRingMat=mat(BRASS,{e:BRASS,ei:0.6,opacity:0});
+  const vRing=new THREE.Mesh(new THREE.TorusGeometry(2.0,0.07,12,72),vRingMat);
+  vRing.position.set(0,5.35,2.0); g.add(vRing);
+  const vLbl=tag("VIRTUALIZE BY DEFAULT",BRASS,{h:0.44,opacity:0});
+  vLbl.position.set(0,5.35,2.0); g.add(vLbl);
+  const vLight=new THREE.PointLight(BRASS,0,20); vLight.position.set(0,5.3,3.2); g.add(vLight);
+  const conf=points(130,BRASS,0.1,11,4.5,7); conf.position.set(0,4.0,1.0); g.add(conf);
+
+  function update(t,time){
+    const kM=S(t,0.2,0.9);
+    smalls.forEach((o)=>{
+      const tgt=o.i<3?-1.7:1.7;
+      o.s.position.x=L(o.x0,tgt,kM);
+      o.s.scale.setScalar(Math.max(0.001,1-0.96*kM));
+      o.s.visible=kM<0.98;
+    });
+    const kB=S(t,0.45,1.0);
+    bigs.forEach((o)=>{
+      o.b.scale.setScalar(Math.max(0.001,kB));
+      o.b.position.y=1.25*kB;
+      o.b.visible=kB>0.02;
+    });
+    sprawlLbl.material.userData.baseOpacity=1-kM;
+    sprawlLbl.visible=kM<0.9;
+    bigLbl.material.userData.baseOpacity=S(t,0.6,1.0);
+    saveLbl.material.userData.baseOpacity=S(t,0.6,1.0);
+    const kT=S(t,1.2,1.8);
+    taxMat.userData.baseOpacity=0.85*kT;
+    taxes.forEach((tx)=>{ tx.visible=kT>0.02; });
+    taxLbl.material.userData.baseOpacity=kT;
+    licLbl.material.userData.baseOpacity=kT;
+    const kG=S(t,1.25,1.85);
+    arcMat.userData.baseOpacity=kG; needleMat.userData.baseOpacity=kG;
+    g90.material.userData.baseOpacity=kG; g100.material.userData.baseOpacity=kG;
+    gLbl.material.userData.baseOpacity=kG;
+    gauge.visible=kG>0.02;
+    needle.rotation.z=L(-1.0,-0.68,S(t,1.3,1.9))+Math.sin(time*2)*0.02*kG;
+    const kS=S(t,2.2,2.8);
+    scale.visible=kS>0.02;
+    setDim(scale,Math.max(0.001,kS));
+    const tilt=L(0.05,-0.2,S(t,2.2,2.9));
+    beam.rotation.z=tilt;
+    hgL.rotation.z=-tilt; hgR.rotation.z=-tilt;
+    coins.forEach((c,i)=>{
+      const k=S(t,2.2+i*0.08,2.6+i*0.08);
+      c.scale.setScalar(Math.max(0.001,k));
+    });
+    const ct=Math.cos(tilt), st=Math.sin(tilt);
+    costLbl.position.set(-2.55*ct,2.95+(-2.55)*st+0.85,2.8);
+    saveLbl2.position.set(2.55*ct,2.95+2.55*st+0.85,2.8);
+    costLbl.material.userData.baseOpacity=kS;
+    saveLbl2.material.userData.baseOpacity=kS;
+    const kV=S(t,3.2,3.8);
+    vRingMat.userData.baseOpacity=0.95*kV;
+    vRing.rotation.z=time*0.8;
+    vRing.visible=kV>0.02;
+    const vs=1+0.03*Math.sin(time*2)*kV;
+    vRing.scale.set(vs,vs,1);
+    vLbl.material.userData.baseOpacity=kV;
+    vLbl.visible=kV>0.02;
+    vLight.intensity=1.4*kV;
+    conf.material.userData.baseOpacity=0.9*kV;
+    conf.visible=kV>0.02;
+    if(conf.visible) driftPoints(conf,time,0.8,4.5,-1);
+  }
+  return {group:g,update:update,back:back};
+}
+
+/* ============================================================
+   ENGINE
+   ============================================================ */
+let renderer=null, scene=null, camera=null;
+let stages=[], floorGlow=null;
+let has3D=false;
+let camPos=null, camLook=null, camPosT=null, camLookT=null;
+let yaw=0,yawT=0,pitch=0,pitchT=0,parX=0,parY=0,parXT=0,parYT=0;
+
+let pos=0, target=0, shown=-1;
+let webglErr="", glHolder=null, diagOn=false, frameNo=0, fps=60;
+const FADE_W=0.9;
+
+function init3D(){
+  const holder=document.getElementById("gl");
+  glHolder=holder; stages=[]; floorGlow=null;
+  renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  renderer.setSize(holder.clientWidth,holder.clientHeight);
+  renderer.setClearColor(PAPER,1);
+  holder.appendChild(renderer.domElement);
+  renderer.domElement.addEventListener("webglcontextlost",(e)=>{
+    if(e&&e.preventDefault) e.preventDefault();
+    webglErr="context lost at runtime";
+    try{ console.warn("WebGL context lost; figure unavailable."); }catch(e2){}
+    try{ fatalFigure(); }catch(e3){}
+  });
+
+  scene=new THREE.Scene();
+  scene.fog=new THREE.Fog(PAPER,26,60);
+  camera=new THREE.PerspectiveCamera(42,holder.clientWidth/Math.max(1,holder.clientHeight),0.1,200);
+
+  scene.add(new THREE.AmbientLight(0xffffff,0.72));
+  const dir=new THREE.DirectionalLight(0xffffff,0.55); dir.position.set(6,10,4); scene.add(dir);
+  const pC=new THREE.PointLight(0xdfe8ff,0.35,40); pC.position.set(-8,4,6); scene.add(pC);
+  const pG=new THREE.PointLight(0xffe9c4,0.3,30); pG.position.set(0,6,8); scene.add(pG);
+
+  const grid=new THREE.GridHelper(46,46,0x9aa5b1,0xd3ccb8);
+  grid.material.transparent=true; grid.material.opacity=0.6; grid.position.y=0;
+  scene.add(grid);
+  floorGlow=new THREE.Mesh(new THREE.PlaneGeometry(30,30),
+    new THREE.MeshBasicMaterial({map:glowTex(),color:0xcbb877,transparent:true,opacity:0.14,depthWrite:false}));
+  floorGlow.rotation.x=-Math.PI/2; floorGlow.position.y=-0.02; scene.add(floorGlow);
+
+  const builders=[buildCH0,buildCH1,buildCH2,buildCH3,buildCH4];
+  builders.forEach((b)=>{
+    const st=b(); st.group.visible=false; scene.add(st.group); stages.push(st);
+  });
+  const c0=CHAPTERS[0].cam;
+  camPos=new THREE.Vector3(c0[0][0],c0[0][1],c0[0][2]);
+  camLook=new THREE.Vector3(c0[1][0],c0[1][1],c0[1][2]);
+  camPosT=camPos.clone(); camLookT=camLook.clone();
+  has3D=true;
+
+  window.addEventListener("resize",()=>{
+    const w=holder.clientWidth,h=holder.clientHeight;
+    renderer.setSize(w,h); camera.aspect=w/Math.max(1,h); camera.updateProjectionMatrix();
+  });
+  wireOrbit(renderer.domElement);
+}
+
+function wireOrbit(el){
+  let down=false,lx=0,ly=0,sx=0,sy=0,st=0,moved=false,lastTapT=0;
+  el.style.touchAction="none";
+  el.addEventListener("pointerdown",(e)=>{ down=true;moved=false;lx=sx=e.clientX;ly=sy=e.clientY;st=performance.now();try{el.setPointerCapture(e.pointerId);}catch(err){} });
+  el.addEventListener("pointermove",(e)=>{
+    const r=el.getBoundingClientRect();
+    parXT=((e.clientX-r.left)/r.width-0.5); parYT=((e.clientY-r.top)/r.height-0.5);
+    if(!down) return;
+    const dx=e.clientX-lx,dy=e.clientY-ly; lx=e.clientX;ly=e.clientY;
+    if(Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)>8) moved=true;
+    yawT+=dx*0.01;
+    pitchT=clamp(pitchT+dy*0.006,-1.1,0.35);
+    const dh=document.getElementById("dragHint"); if(dh) dh.style.opacity="0";
+  });
+  el.addEventListener("pointerup",(e)=>{
+    down=false;
+    const now=performance.now(), dt=now-st, dx=e.clientX-sx, dy=e.clientY-sy;
+    const adx=Math.abs(dx), ady=Math.abs(dy);
+    if(!moved||(adx<10&&ady<10)){
+      if(now-lastTapT<350){ yawT=0; pitchT=0; lastTapT=0; }
+      else lastTapT=now;
+      return;
+    }
+    if(dt<350&&(adx>100||ady>100)){
+      if(ady>=adx) (dy<0?next:prev)();
+      else (dx<0?next:prev)();
+    }
+  });
+  el.addEventListener("pointercancel",()=>{down=false;});
+  el.addEventListener("dblclick",()=>{ yawT=0; pitchT=0; });
+}
+
+/* ---------------- navigation state ---------------- */
+const $=(id)=>document.getElementById(id);
+let lectureOn=false,lastAdvance=performance.now();
+const LEC_MS=7000;
+
+function goTo(i){
+  const ni=clamp(Math.round(i),0,N-1);
+  if(ni!==target){ target=ni; lastAdvance=performance.now(); }
+  try{ history.replaceState(null,"","#s="+target); }catch(e){}
+}
+function next(){ if(target>=N-1){ goTo(0); } else goTo(target+1); }
+function prev(){ goTo(target-1); }
+
+function syncUI(force){
+  const idx=clamp(Math.round(pos),0,N-1);
+  if(idx===shown&&!force) return;
+  const dirn=idx>shown?1:-1;
+  shown=idx;
+  const f=FLAT[idx], ch=CHAPTERS[f.c], st=ch.steps[f.l];
+  document.documentElement.style.setProperty("--acc",ch.acc);
+  $("kicker").textContent="CHAPTER "+(f.c+1)+" OF "+CHAPTERS.length+" \u00B7 "+ch.name.toUpperCase();
+  $("stepof").textContent="STEP "+(f.l+1)+" OF "+ch.steps.length;
+  $("stTitle").innerHTML='<span class="n">'+String(idx+1).padStart(2,"0")+".</span> "+st.t;
+  $("stBody").textContent=st.b;
+  $("stBullets").innerHTML=st.pts.map((p)=>"<li>"+p+"</li>").join("");
+  $("counter").textContent=(idx+1)+" / "+N;
+  $("chapPill").innerHTML="<b>CH "+(f.c+1)+"/"+CHAPTERS.length+"</b> &middot; "+ch.name.toUpperCase();
+  $("stateK").textContent="FIGURE \u00B7 STATE "+(f.l+1)+"/"+ch.steps.length;
+  $("stateCap").textContent=st.cap;
+  const tabs=$("tabs").children;
+  for(let i=0;i<tabs.length;i++) tabs[i].classList.toggle("on",i===f.c);
+  const dots=$("dots").children;
+  for(let i=0;i<dots.length;i++){
+    const d=dots[i]; if(!d.dataset||d.dataset.i===undefined) continue;
+    const di=+d.dataset.i;
+    d.classList.toggle("on",di===idx);
+    d.classList.toggle("done",di<idx);
+  }
+  $("pfill").style.width=(idx/(N-1)*100)+"%";
+  $("prevBtn").disabled=idx===0;
+  $("fPrev").disabled=idx===0;
+  $("nextBtn").innerHTML=idx===N-1?"Restart":"Next &rarr;";
+  const sw=$("swap");
+  sw.classList.remove("enter","up"); void sw.offsetWidth;
+  sw.classList.add("enter"); if(dirn<0) sw.classList.add("up");
+}
+
+/* ---------------- main loop ---------------- */
+let prevT=performance.now();
+function animate(){
+  requestAnimationFrame(animate);
+  const now=performance.now();
+  const dt=Math.min(0.05,(now-prevT)/1000); prevT=now;
+  const time=now/1000;
+  const tA=REDUCED?time*0.12:time;
+  frameNo++; if(dt>0) fps+=(1/Math.max(dt,1e-3)-fps)*0.05;
+
+  pos+=(target-pos)*Math.min(1,dt*3.4);
+  if(Math.abs(target-pos)<0.0015) pos=target;
+
+  if(lectureOn&&now-lastAdvance>LEC_MS){
+    if(target<N-1){ goTo(target+1); } else setLecture(false);
+  }
+
+  if(has3D){
+    if(glHolder&&renderer){
+      const hw=glHolder.clientWidth, hh=glHolder.clientHeight, sz=renderer.getSize();
+      if(hw>0&&hh>0&&(hw!==sz[0]||hh!==sz[1])){ renderer.setSize(hw,hh); camera.aspect=hw/hh; camera.updateProjectionMatrix(); }
+    }
+    const ai=clamp(Math.round(pos),0,N-1), ac=FLAT[ai].c;
+    const cam=CHAPTERS[ac].cam;
+    camPosT.set(cam[0][0],cam[0][1],cam[0][2]);
+    camLookT.set(cam[1][0],cam[1][1],cam[1][2]);
+    camPos.lerp(camPosT,Math.min(1,dt*2.4));
+    camLook.lerp(camLookT,Math.min(1,dt*2.4));
+    yaw+=(yawT-yaw)*Math.min(1,dt*8);
+    pitch+=(pitchT-pitch)*Math.min(1,dt*8);
+    parX+=(parXT-parX)*Math.min(1,dt*3);
+    parY+=(parYT-parY)*Math.min(1,dt*3);
+    const ox=camPos.x-camLook.x, oy=camPos.y-camLook.y, oz=camPos.z-camLook.z;
+    const radius=Math.max(4,Math.sqrt(ox*ox+oy*oy+oz*oz));
+    const theta=Math.atan2(ox,oz)+yaw;
+    const phi=clamp(Math.acos(clamp(oy/radius,-1,1))+pitch,0.15,1.52);
+    camera.position.set(
+      camLook.x+radius*Math.sin(phi)*Math.sin(theta),
+      camLook.y+radius*Math.cos(phi),
+      camLook.z+radius*Math.sin(phi)*Math.cos(theta));
+    const fwd=tmpV.copy(camera.position).sub(camLook).normalize();
+    const right=new THREE.Vector3().crossVectors(fwd,new THREE.Vector3(0,1,0)).normalize();
+    camera.position.addScaledVector(right,parX*0.8);
+    camera.position.y+=parY*0.5;
+    camera.lookAt(camLook);
+    if(floorGlow) floorGlow.material.opacity=0.12+0.04*Math.sin(tA*0.8);
+
+    stages.forEach((st,ci)=>{
+      const s=CH_START[ci], e=s+CHAPTERS[ci].steps.length-1;
+      let k=1;
+      if(pos<s-FADE_W||pos>e+FADE_W) k=0;
+      else if(pos<s) k=1-(s-pos)/FADE_W;
+      else if(pos>e) k=1-(pos-e)/FADE_W;
+      k=k*k*(3-2*k);
+      st.group.visible=k>0.01;
+      if(st.group.visible){
+        st.update(clamp(pos-s,0,CHAPTERS[ci].steps.length-1),tA);
+        if(st.back) st.back.position.set(camLook.x-fwd.x*10,camLook.y-fwd.y*10+1.2,camLook.z-fwd.z*10);
+        applyFade(st.group,k);
+      }
+    });
+    renderer.render(scene,camera);
+    if(diagOn&&frameNo%15===0) updateDiag();
+  }
+
+  syncUI(false);
+  const sc=$("scrub");
+  if(document.activeElement!==sc&&!sc.matches(":active")) sc.value=pos;
+}
+
+/* ---------------- diagnostics + recovery ---------------- */
+function toggleDiag(){
+  diagOn=!diagOn;
+  const el=document.getElementById("diag");
+  if(el) el.style.display=diagOn?"block":"none";
+  if(diagOn) updateDiag();
+}
+function updateDiag(){
+  const el=document.getElementById("diag"); if(!el||!diagOn) return;
+  const st=(renderer&&renderer.stats)||{};
+  el.textContent=
+    "BUILD "+BUILD+"\n"+
+    "renderer: "+(renderer?("webgl ("+(renderer._mode||"?")+")"):"none")+"\n"+
+    "webgl error: "+(webglErr||"none")+"\n"+
+    "stage: "+(glHolder?glHolder.clientWidth+"x"+glHolder.clientHeight:"?")+" css / canvas "+
+    (renderer?renderer.domElement.width+"x"+renderer.domElement.height:"?")+"\n"+
+    "fps: "+fps.toFixed(0)+"  step: "+(shown+1)+"/"+N+"  pos: "+pos.toFixed(2)+"\n"+
+    "draws: "+(st.draws||0)+"  tris: "+(st.tris||0);
+}
+try{ console.log("%cVirtualization lecture "+BUILD+" — press D for diagnostics","font-weight:bold"); }catch(e){}
+
+function fatalFigure(){
+  try{
+    document.getElementById("glFallback").classList.add("show");
+    document.getElementById("dragHint").style.display="none";
+    const lv=document.querySelector(".live"); if(lv) lv.style.display="none";
+  }catch(e){}
+}
+/* ---------------- controls ---------------- */
+function setLecture(on){
+  lectureOn=on;
+  $("lecBtn").classList.toggle("on",on);
+  $("lecBtn").innerHTML=on?"&#10074;&#10074;":"&#9654;";
+  $("lecNote").style.display=on?"block":"none";
+  lastAdvance=performance.now();
+}
+function toggleFS(){
+  if(!document.fullscreenElement){ document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen(); }
+  else{ document.exitFullscreen&&document.exitFullscreen(); }
+}
+function toggleHelp(show){
+  const m=$("helpModal");
+  const on=show!==undefined?show:!m.classList.contains("show");
+  m.classList.toggle("show",on);
+}
+
+function wireUI(){
+  const tabs=$("tabs");
+  CHAPTERS.forEach((c,i)=>{
+    const b=document.createElement("button");
+    b.className="tab"+(i===0?" on":"");
+    b.innerHTML="<b>0"+(i+1)+"</b><span class='tl'>"+c.tab+"</span>";
+    b.title=c.name;
+    b.addEventListener("click",()=>goTo(CH_START[i]));
+    tabs.appendChild(b);
+  });
+  const dots=$("dots");
+  FLAT.forEach((f,i)=>{
+    if(i>0&&f.l===0){ const s=document.createElement("span"); s.className="sep"; dots.appendChild(s); }
+    const d=document.createElement("button");
+    d.className="dot"; d.dataset.i=i;
+    d.title=CHAPTERS[f.c].name+" \u2014 "+CHAPTERS[f.c].steps[f.l].t;
+    d.setAttribute("aria-label","Go to step "+(i+1));
+    d.addEventListener("click",()=>goTo(i));
+    dots.appendChild(d);
+  });
+  $("scrub").max=N-1;
+  try{ $("keysHint").innerHTML+=" &middot; BUILD "+BUILD; }catch(e){}
+  $("nextBtn").addEventListener("click",next);
+  $("prevBtn").addEventListener("click",prev);
+  $("fNext").addEventListener("click",next);
+  $("fPrev").addEventListener("click",prev);
+  $("lecBtn").addEventListener("click",()=>setLecture(!lectureOn));
+  $("fsBtn").addEventListener("click",toggleFS);
+  $("helpBtn").addEventListener("click",()=>toggleHelp());
+  $("helpClose").addEventListener("click",()=>toggleHelp(false));
+  $("diagLink").addEventListener("click",()=>toggleDiag());
+  $("helpModal").addEventListener("click",(e)=>{ if(e.target.id==="helpModal") toggleHelp(false); });
+
+  const sc=$("scrub");
+  sc.addEventListener("input",()=>{
+    const v=parseFloat(sc.value);
+    pos=v; target=Math.round(v); lastAdvance=performance.now();
+  });
+
+  let acc=0,coolUntil=0;
+  window.addEventListener("wheel",(e)=>{
+    const panel=$("panel");
+    if(panel.contains(e.target)){
+      const canUp=panel.scrollTop>0;
+      const canDown=panel.scrollTop+panel.clientHeight<panel.scrollHeight-2;
+      if((e.deltaY>0&&canDown)||(e.deltaY<0&&canUp)) return;
+    }
+    e.preventDefault();
+    const now=performance.now();
+    if(now<coolUntil){ acc=0; return; }
+    const d=Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY;
+    acc+=d;
+    if(acc>42){ next(); acc=0; coolUntil=now+650; }
+    else if(acc<-42){ prev(); acc=0; coolUntil=now+650; }
+  },{passive:false});
+
+  window.addEventListener("keydown",(e)=>{
+    if(e.key==="ArrowDown"||e.key==="ArrowRight"||e.key===" "||e.key==="PageDown"){ e.preventDefault(); next(); }
+    else if(e.key==="ArrowUp"||e.key==="ArrowLeft"||e.key==="PageUp"){ e.preventDefault(); prev(); }
+    else if(e.key==="Home"){ e.preventDefault(); goTo(0); }
+    else if(e.key==="End"){ e.preventDefault(); goTo(N-1); }
+    else if(e.key==="f"||e.key==="F"){ toggleFS(); }
+    else if(e.key==="l"||e.key==="L"){ setLecture(!lectureOn); }
+    else if(e.key==="?"){ toggleHelp(); }
+    else if(e.key==="d"||e.key==="D"){ toggleDiag(); }
+    else if(e.key==="Escape"){ toggleHelp(false); }
+  });
+
+  try{
+    const m=location.hash.match(/s=(\d+)/);
+    if(m){ const v=clamp(+m[1],0,N-1); pos=v; target=v; }
+  }catch(e){}
+}
+
+/* ---------------- boot ---------------- */
+wireUI();
+try{ init3D(); }
+catch(err){
+  webglErr=(err&&err.message)||"unknown";
+  try{ console.warn("WebGL figure unavailable ("+webglErr+")."); }catch(e2){}
+  fatalFigure();
+}
+syncUI(true);
+animate();
+</script>
+</body>
+</html>

@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a111c">
+<title>Disk Scheduling Lab — Follow the Head</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #09111b;
+    --panel: #111c2a;
+    --panel-2: #0d1724;
+    --panel-3: #162437;
+    --line: rgba(171, 196, 223, .13);
+    --line-strong: rgba(171, 196, 223, .22);
+    --text: #edf4fb;
+    --muted: #91a2b6;
+    --soft: #bdcad8;
+    --teal: #59e0cf;
+    --teal-dark: #143b3c;
+    --blue: #86a8ff;
+    --gold: #f3c46f;
+    --rose: #f09b9b;
+    --radius: 19px;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--text);
+    background:
+      radial-gradient(ellipse at 9% 0%, rgba(45, 113, 125, .17), transparent 34rem),
+      radial-gradient(ellipse at 92% 7%, rgba(75, 93, 170, .13), transparent 32rem),
+      var(--bg);
+  }
+  button { font: inherit; }
+  .app-shell { width: min(1180px, calc(100% - 44px)); margin: 0 auto; padding: 31px 0 42px; }
+  .brand-row { display: flex; align-items: center; gap: 11px; margin-bottom: 25px; color: #c7d4e2; }
+  .brand-mark { display: grid; place-items: center; width: 35px; height: 35px; border: 1px solid rgba(89,224,207,.36); border-radius: 12px; background: rgba(89,224,207,.08); color: var(--teal); }
+  .brand-copy { display: flex; flex-direction: column; gap: 2px; }
+  .brand-copy strong { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
+  .brand-copy span { color: var(--muted); font-size: 11px; }
+  .eyebrow { margin: 0 0 9px; color: var(--teal); font-size: 10px; font-weight: 800; letter-spacing: .17em; text-transform: uppercase; }
+  h1, h2, h3, p { margin-top: 0; }
+  h1 { margin-bottom: 9px; font-size: clamp(31px, 4.4vw, 48px); line-height: 1.03; letter-spacing: -.045em; font-weight: 730; }
+  .hero-copy { max-width: 690px; margin: 0; color: #a8b7c7; font-size: 15px; line-height: 1.65; }
+  .page-hero { margin-bottom: 26px; }
+  .panel { border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(145deg, rgba(19,31,47,.97), rgba(13,23,36,.97)); box-shadow: 0 15px 45px rgba(0,0,0,.15); }
+  .workload-card { padding: 21px 23px; margin-bottom: 24px; }
+  .workload-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 17px; }
+  .workload-top h2, .section-heading h2 { margin: 0 0 5px; font-size: 16px; letter-spacing: -.015em; }
+  .workload-top p, .section-heading p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .fixed-badge, .tag { display: inline-flex; align-items: center; gap: 7px; border: 1px solid rgba(89,224,207,.2); border-radius: 999px; padding: 7px 10px; color: #a9e9e0; background: rgba(89,224,207,.07); font-size: 10px; font-weight: 750; letter-spacing: .04em; white-space: nowrap; }
+  .fixed-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 10px rgba(89,224,207,.6); }
+  .workload-facts { display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 11px; }
+  .fact { min-width: 0; padding: 12px 14px; border: 1px solid rgba(171,196,223,.1); border-radius: 13px; background: rgba(5,12,21,.22); }
+  .fact-label { display: block; margin-bottom: 6px; color: #75889d; font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+  .fact-value { color: var(--text); font-size: 14px; font-weight: 700; }
+  .fact-sub { display: block; margin-top: 4px; color: #8394a8; font-size: 10px; }
+  .queue-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .queue-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border: 1px solid rgba(171,196,223,.11); border-radius: 8px; color: #d4dfeb; background: rgba(171,196,223,.045); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .queue-chip small { color: #73869c; font-size: 9px; }
+  .workload-note { display: flex; align-items: flex-start; gap: 9px; margin: 13px 2px 0; color: #8799ad; font-size: 11px; line-height: 1.55; }
+  .info-mark { display: inline-grid; flex: 0 0 16px; place-items: center; width: 16px; height: 16px; border: 1px solid rgba(134,168,255,.35); border-radius: 50%; color: var(--blue); font-size: 10px; font-weight: 800; }
+  .section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-bottom: 13px; }
+  .section-heading h2 { font-size: 18px; }
+  .section-heading .small-note { color: #7c8da1; font-size: 10px; white-space: nowrap; }
+  .algorithm-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; }
+  .algorithm-card { position: relative; width: 100%; min-height: 145px; padding: 15px 16px 14px; overflow: hidden; text-align: left; color: var(--text); border: 1px solid rgba(171,196,223,.13); border-radius: 15px; background: linear-gradient(145deg, rgba(20,33,50,.95), rgba(13,23,35,.92)); cursor: pointer; transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease; }
+  .algorithm-card:hover { transform: translateY(-2px); border-color: rgba(171,196,223,.31); }
+  .algorithm-card.selected { border-color: rgba(89,224,207,.72); background: linear-gradient(145deg, rgba(20,55,58,.75), rgba(14,31,43,.98)); box-shadow: 0 0 0 1px rgba(89,224,207,.13), 0 12px 28px rgba(0,0,0,.18); }
+  .algorithm-card:focus-visible, button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  .algo-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 11px; }
+  .algo-number { color: #70839a; font-size: 10px; font-weight: 800; letter-spacing: .1em; }
+  .algo-symbol { display: grid; place-items: center; width: 29px; height: 29px; border: 1px solid rgba(171,196,223,.13); border-radius: 9px; color: #a7bad0; background: rgba(255,255,255,.025); font-size: 12px; font-weight: 800; }
+  .selected .algo-symbol { color: var(--teal); border-color: rgba(89,224,207,.25); background: rgba(89,224,207,.1); }
+  .algorithm-card h3 { margin: 0 0 4px; font-size: 14px; letter-spacing: -.01em; }
+  .algo-fullname { display: block; margin-bottom: 9px; color: #8293a8; font-size: 10px; }
+  .algorithm-card p { max-width: 290px; margin: 0; color: #a8b6c6; font-size: 11px; line-height: 1.5; }
+  .selection-indicator { position: absolute; top: 15px; right: 15px; width: 16px; height: 16px; border: 1px solid rgba(171,196,223,.28); border-radius: 50%; }
+  .selected .selection-indicator { border-color: var(--teal); background: var(--teal); box-shadow: inset 0 0 0 4px #123537; }
+  .selection-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 15px; padding: 14px 16px; border: 1px solid rgba(171,196,223,.1); border-radius: 13px; background: rgba(5,12,21,.22); }
+  .selection-hint { display: flex; gap: 9px; align-items: flex-start; color: #91a2b6; font-size: 11px; line-height: 1.5; }
+  .selection-hint strong { color: #d2deea; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 16px; border: 1px solid transparent; border-radius: 11px; cursor: pointer; font-size: 12px; font-weight: 750; transition: transform .16s ease, border-color .16s ease, background .16s ease, opacity .16s ease; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); }
+  .btn:disabled { opacity: .38; cursor: not-allowed; }
+  .btn-primary { color: #071819; background: var(--teal); box-shadow: 0 7px 19px rgba(48,194,180,.14); }
+  .btn-primary:hover:not(:disabled) { background: #75e9db; }
+  .btn-secondary { color: #d5e0ec; border-color: rgba(171,196,223,.18); background: rgba(171,196,223,.055); }
+  .btn-secondary:hover:not(:disabled) { border-color: rgba(171,196,223,.34); background: rgba(171,196,223,.09); }
+  .btn-quiet { color: #a9b8c8; border-color: transparent; background: transparent; }
+  .btn-quiet:hover:not(:disabled) { color: var(--text); background: rgba(171,196,223,.07); }
+  .btn-icon { font-size: 16px; line-height: 1; }
+  .footnote { margin: 17px 2px 0; color: #66798f; font-size: 10px; line-height: 1.55; }
+  /* Walkthrough */
+  .run-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+  .run-heading h1 { margin-bottom: 7px; font-size: clamp(27px, 3.7vw, 39px); }
+  .run-heading .hero-copy { max-width: 730px; font-size: 13px; }
+  .run-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+  .run-actions .btn { min-height: 38px; padding: 0 12px; font-size: 11px; }
+  .run-algo-tag { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 9px; color: #a0b2c6; font-size: 10px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+  .run-algo-tag span { color: var(--teal); }
+  .step-bar { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 15px; margin-bottom: 16px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 15px; background: rgba(15,26,40,.88); }
+  .progress-side { min-width: 0; }
+  .progress-copy { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+  .progress-copy strong { color: #d5e0ec; font-size: 11px; letter-spacing: .04em; }
+  .progress-copy span { color: #778aa0; font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .progress-track { height: 5px; overflow: hidden; border-radius: 20px; background: rgba(171,196,223,.1); }
+  .progress-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #52d7c8, #8caaff); transition: width .32s ease; }
+  .step-buttons { display: flex; gap: 7px; align-items: center; }
+  .step-buttons .btn { min-height: 37px; padding: 0 12px; font-size: 11px; }
+  .step-buttons .btn-primary { min-width: 132px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  .stat-card { min-width: 0; padding: 12px 14px; border: 1px solid rgba(171,196,223,.12); border-radius: 13px; background: rgba(17,28,42,.8); }
+  .stat-card .fact-label { margin-bottom: 6px; }
+  .stat-value { display: flex; align-items: baseline; gap: 6px; color: #eef5fc; font-size: 22px; font-weight: 750; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+  .stat-value small { color: #7f92a7; font-size: 10px; font-weight: 550; letter-spacing: 0; }
+  .stat-sub { margin-top: 3px; color: #75879d; font-size: 9px; }
+  .run-grid { display: grid; grid-template-columns: minmax(0, 1.62fr) minmax(310px, .9fr); gap: 13px; align-items: start; }
+  .graph-panel { min-width: 0; padding: 17px 17px 13px; }
+  .graph-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+  .graph-head h2 { margin: 0 0 4px; font-size: 14px; }
+  .graph-head p { margin: 0; color: #8092a8; font-size: 10px; line-height: 1.5; }
+  .graph-scale { flex-shrink: 0; color: #6f8297; font-size: 9px; }
+  .chart-wrap { width: 100%; overflow: hidden; border: 1px solid rgba(171,196,223,.07); border-radius: 13px; background: linear-gradient(180deg, rgba(5,13,22,.5), rgba(8,17,28,.78)); }
+  .chart-svg { display: block; width: 100%; height: auto; min-height: 260px; }
+  .chart-svg text { font-family: inherit; }
+  .chart-grid { stroke: rgba(171,196,223,.095); stroke-width: 1; }
+  .chart-axis { stroke: rgba(171,196,223,.26); stroke-width: 1; }
+  .chart-tick { fill: #71849a; font-size: 10px; }
+  .chart-axis-title { fill: #8394a9; font-size: 9px; font-weight: 750; letter-spacing: 1.2px; }
+  .chart-order-tick { fill: #64788d; font-size: 9px; }
+  .chart-value { fill: #dce7f1; font-size: 10px; font-weight: 750; paint-order: stroke; stroke: #0b1522; stroke-width: 3px; stroke-linejoin: round; }
+  .chart-start-label { fill: var(--teal); font-size: 8px; font-weight: 800; letter-spacing: .7px; }
+  .chart-empty { fill: #74889e; font-size: 11px; }
+  .route-segment { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .segment-service { stroke: #54dccc; }
+  .segment-boundary { stroke: #829fff; }
+  .segment-wrap { stroke: #f3c46f; stroke-dasharray: 5 5; }
+  .segment-current { filter: drop-shadow(0 0 4px rgba(89,224,207,.45)); }
+  .segment-current.segment-wrap { filter: drop-shadow(0 0 4px rgba(243,196,111,.35)); }
+  .chart-point { stroke: #0b1522; stroke-width: 2.5; }
+  .point-service { fill: #58ddce; }
+  .point-boundary { fill: #8aa6ff; }
+  .point-wrap { fill: #f3c46f; }
+  .point-start { fill: #eef6ff; stroke: var(--teal); stroke-width: 3; }
+  .point-current { filter: drop-shadow(0 0 5px rgba(89,224,207,.6)); }
+  .graph-legend { display: flex; flex-wrap: wrap; gap: 11px 15px; margin: 11px 2px 0; color: #8192a7; font-size: 9px; }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .legend-line { width: 16px; height: 3px; border-radius: 5px; background: var(--teal); }
+  .legend-line.boundary { background: var(--blue); }
+  .legend-line.wrap { height: 0; border-top: 2px dashed var(--gold); background: none; }
+  .legend-dot { width: 7px; height: 7px; border: 1px solid var(--teal); border-radius: 50%; background: #eef6ff; }
+  .explain-panel { display: flex; flex-direction: column; min-width: 0; height: 620px; overflow-y: auto; overscroll-behavior: contain; scrollbar-color: #40546b transparent; scrollbar-width: thin; padding: 18px; }
+  .event-label { display: inline-flex; align-self: flex-start; align-items: center; gap: 7px; margin-bottom: 11px; padding: 6px 8px; border: 1px solid rgba(89,224,207,.2); border-radius: 7px; color: #a7e5dc; background: rgba(89,224,207,.065); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  .event-label.boundary { border-color: rgba(134,168,255,.25); color: #b5c4ff; background: rgba(134,168,255,.08); }
+  .event-label.wrap { border-color: rgba(243,196,111,.25); color: #f5d899; background: rgba(243,196,111,.08); }
+  .event-label.complete { border-color: rgba(89,224,207,.2); }
+  .explain-panel h2 { margin: 0 0 7px; font-size: 20px; line-height: 1.18; letter-spacing: -.025em; }
+  .explain-lead { margin: 0 0 14px; color: #9aabbd; font-size: 11px; line-height: 1.6; }
+  .math-card { margin: 0 0 13px; padding: 12px 13px; border: 1px solid rgba(171,196,223,.11); border-radius: 12px; background: rgba(5,12,21,.3); }
+  .math-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .math-row + .math-row { margin-top: 9px; padding-top: 9px; border-top: 1px solid rgba(171,196,223,.09); }
+  .math-label { color: #7f91a6; font-size: 9px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+  .math-value { color: #e7f0f9; font-size: 12px; font-weight: 730; text-align: right; font-variant-numeric: tabular-nums; }
+  .math-value strong { color: var(--teal); font-size: 15px; }
+  .math-note { margin: 9px 0 0; color: #73869a; font-size: 9px; line-height: 1.45; }
+  .decision-box { margin-top: 1px; padding-top: 2px; }
+  .decision-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; color: #dbe5ef; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .decision-title small { color: #71849a; font-size: 9px; font-weight: 550; letter-spacing: 0; text-transform: none; }
+  .decision-copy { margin: 0 0 9px; color: #93a5b8; font-size: 10px; line-height: 1.55; }
+  .distance-table-wrap { max-height: 208px; overflow: auto; border: 1px solid rgba(171,196,223,.1); border-radius: 10px; scrollbar-color: #40546b transparent; scrollbar-width: thin; }
+  .distance-table { width: 100%; border-collapse: collapse; font-size: 10px; font-variant-numeric: tabular-nums; }
+  .distance-table th { position: sticky; top: 0; padding: 7px 9px; color: #8294a9; background: #152336; font-size: 9px; font-weight: 750; text-align: left; }
+  .distance-table td { padding: 6px 9px; color: #aebccc; border-top: 1px solid rgba(171,196,223,.07); }
+  .distance-table tr.is-chosen td { color: #d6fff8; background: rgba(89,224,207,.085); }
+  .distance-table tr.is-chosen td:first-child { color: var(--teal); font-weight: 800; }
+  .chosen-mark { color: var(--teal); font-size: 9px; font-weight: 800; }
+  .choice-chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 7px 0; }
+  .decision-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 7px; border: 1px solid rgba(171,196,223,.12); border-radius: 7px; color: #adbdcd; background: rgba(171,196,223,.04); font-size: 10px; font-variant-numeric: tabular-nums; }
+  .decision-chip.chosen { color: #c5fff5; border-color: rgba(89,224,207,.38); background: rgba(89,224,207,.1); }
+  .decision-chip small { color: #778ba0; font-size: 8px; }
+  .decision-chip.chosen small { color: #8ad9ce; }
+  .sub-list-label { margin: 9px 0 5px; color: #71849a; font-size: 9px; font-weight: 700; letter-spacing: .045em; }
+  .rule-note { display: flex; align-items: flex-start; gap: 8px; margin-top: auto; padding: 10px 0 0; color: #8192a6; font-size: 9px; line-height: 1.5; }
+  .rule-note .info-mark { flex-basis: 15px; width: 15px; height: 15px; font-size: 9px; }
+  .intro-queue { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+  .intro-next { margin-top: 2px; padding: 11px 12px; border-left: 2px solid var(--teal); border-radius: 0 9px 9px 0; color: #aab9c8; background: rgba(89,224,207,.05); font-size: 10px; line-height: 1.55; }
+  .intro-next strong { color: #d7f8f3; }
+  .result-total { margin: 4px 0 12px; padding: 14px 14px 12px; border: 1px solid rgba(89,224,207,.18); border-radius: 13px; background: linear-gradient(135deg, rgba(19,61,60,.34), rgba(5,15,23,.35)); }
+  .result-total .fact-label { margin-bottom: 5px; color: #83bfb7; }
+  .result-number { display: flex; align-items: baseline; gap: 8px; color: #e8fffb; font-size: 35px; font-weight: 780; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+  .result-number small { color: #95bdb8; font-size: 11px; font-weight: 600; letter-spacing: 0; }
+  .result-average { margin-top: 4px; color: #8faea9; font-size: 9px; }
+  .formula-box { margin: 0 0 12px; padding: 10px 11px; border: 1px solid rgba(171,196,223,.1); border-radius: 10px; background: rgba(5,12,21,.3); }
+  .formula-box .fact-label { margin-bottom: 6px; }
+  .formula-text { color: #bac9d8; font-size: 10px; line-height: 1.65; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .result-order { margin-bottom: 12px; }
+  .result-order .fact-label { margin-bottom: 7px; }
+  .order-sequence { color: #d5e0ea; font-size: 10px; line-height: 1.8; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .result-note { margin: 0 0 13px; color: #7f91a5; font-size: 9px; line-height: 1.5; }
+  .result-buttons { display: grid; grid-template-columns: 1fr; gap: 7px; margin-top: auto; }
+  .result-buttons .btn { width: 100%; min-height: 38px; }
+  .run-foot { display: flex; justify-content: space-between; gap: 12px; margin: 12px 2px 0; color: #66798d; font-size: 9px; line-height: 1.5; }
+  .key-hint { color: #7b8da1; }
+  .keycap { display: inline-flex; min-width: 18px; justify-content: center; margin: 0 2px; padding: 1px 4px; border: 1px solid rgba(171,196,223,.18); border-radius: 4px; color: #a7b5c4; background: rgba(171,196,223,.04); font-size: 8px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  @media (max-width: 900px) {
+    .run-grid { grid-template-columns: minmax(0, 1.25fr) minmax(290px, .9fr); }
+    .chart-svg { min-height: 230px; }
+    .app-shell { width: min(100% - 32px, 760px); }
+  }
+  @media (max-width: 700px) {
+    .app-shell { width: calc(100% - 26px); padding-top: 20px; }
+    .algorithm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .workload-facts { grid-template-columns: 1fr 1fr; }
+    .fact:last-child { grid-column: 1 / -1; }
+    .run-heading { display: block; }
+    .run-actions { margin-top: 13px; }
+    .run-grid { grid-template-columns: 1fr; }
+    .explain-panel { height: auto; max-height: none; overflow: visible; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .step-bar { grid-template-columns: 1fr; }
+    .step-buttons { justify-content: space-between; }
+    .step-buttons .btn-primary { flex: 1; }
+    .chart-svg { min-height: 205px; }
+  }
+  @media (max-width: 460px) {
+    .algorithm-grid { grid-template-columns: 1fr; }
+    .algorithm-card { min-height: 128px; }
+    .workload-card { padding: 17px; }
+    .workload-top { display: block; }
+    .fixed-badge { margin-top: 12px; }
+    .selection-row { align-items: stretch; flex-direction: column; }
+    .selection-row .btn { width: 100%; }
+    .section-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
+    .run-actions .btn { flex: 1; }
+    .graph-panel { padding: 13px 10px 11px; }
+    .explain-panel { padding: 16px; }
+    .chart-svg { min-height: 178px; }
+    .graph-scale { display: none; }
+    .run-foot { flex-direction: column; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div id="app" aria-live="polite"></div>
+<script>
+(() => {
+  'use strict';
+
+  const PROBLEM = Object.freeze({
+    min: 0,
+    max: 199,
+    head: 53,
+    direction: 1,
+    queue: Object.freeze([98, 183, 37, 122, 14, 124, 65, 67, 150, 45])
+  });
+
+  const ALGORITHMS = [
+    { id: 'FCFS', symbol: '01', name: 'FCFS', full: 'First Come, First Served', short: 'Serve requests in their arrival order. Simple and fair; seek distances can add up.', detail: 'The request queue is followed exactly as given.' },
+    { id: 'SSTF', symbol: '↔', name: 'SSTF', full: 'Shortest Seek Time First', short: 'Choose the pending request nearest to the current head. A distant request can wait.', detail: 'Every move compares the remaining requests by seek distance.' },
+    { id: 'SCAN', symbol: '↕', name: 'SCAN', full: 'Elevator / SCAN', short: 'Sweep in one direction to the physical disk edge, then reverse.', detail: 'This run starts toward higher cylinders and uses the disk boundary.' },
+    { id: 'CSCAN', symbol: '⟳', name: 'C-SCAN', full: 'Circular SCAN', short: 'Sweep one way; return to the other physical edge without serving on the return.', detail: 'The circular return is counted as head movement.' },
+    { id: 'LOOK', symbol: '⌁', name: 'LOOK', full: 'LOOK', short: 'Sweep only as far as the last pending request, then reverse.', detail: 'Unlike SCAN, LOOK does not travel to an unused disk edge.' },
+    { id: 'CLOOK', symbol: '⤴', name: 'C-LOOK', full: 'Circular LOOK', short: 'Sweep to the last pending request, then jump to the first pending request.', detail: 'The wrap skips unused cylinder space; jump distance is counted.' }
+  ];
+
+  const state = { mode: 'select', selected: 'FCFS', sim: null, step: 0 };
+  const app = document.getElementById('app');
+  const fmt = (value) => new Intl.NumberFormat('en-IN').format(value);
+  const absDistance = (a, b) => Math.abs(a - b);
+  const byCylinderAsc = (a, b) => a - b;
+  const algoById = (id) => ALGORITHMS.find((algo) => algo.id === id);
+
+  function simulate(algoId) {
+    let current = PROBLEM.head;
+    let pending = [...PROBLEM.queue];
+    const actions = [];
+
+    function pushAction({ to, kind, request = null, selection, story }) {
+      const action = {
+        from: current,
+        to,
+        kind,
+        request,
+        selection,
+        story,
+        delta: absDistance(current, to),
+        before: 0,
+        after: 0
+      };
+      actions.push(action);
+      current = to;
+      if (request !== null) pending = pending.filter((item) => item !== request);
+      return action;
+    }
+
+    if (algoId === 'FCFS') {
+      let arrivalNumber = 0;
+      while (pending.length) {
+        const snapshot = [...pending];
+        const request = snapshot[0];
+        const selection = {
+          type: 'fcfs',
+          candidates: snapshot,
+          chosen: request,
+          position: arrivalNumber + 1,
+          total: PROBLEM.queue.length,
+          note: `FCFS takes the next item in the arrival queue. Request ${request} is number ${arrivalNumber + 1} in that queue; no distance comparison changes the order.`
+        };
+        pushAction({
+          to: request,
+          kind: 'service',
+          request,
+          selection,
+          story: `The next request in arrival order is cylinder ${request}. FCFS serves it regardless of how far the head must travel.`
+        });
+        arrivalNumber += 1;
+      }
+    } else if (algoId === 'SSTF') {
+      while (pending.length) {
+        const candidates = pending
+          .map((request) => ({ request, distance: absDistance(current, request) }))
+          .sort((a, b) => a.distance - b.distance || a.request - b.request);
+        const chosen = candidates[0];
+        const selection = {
+          type: 'sstf',
+          candidates,
+          chosen: chosen.request,
+          current,
+          note: `SSTF measures every pending request from cylinder ${current}. The smallest distance is ${chosen.distance}, to cylinder ${chosen.request}. Ties, if any, go to the lower cylinder.`
+        };
+        pushAction({
+          to: chosen.request,
+          kind: 'service',
+          request: chosen.request,
+          selection,
+          story: `From cylinder ${current}, request ${chosen.request} is closest: |${chosen.request} − ${current}| = ${chosen.distance}.`
+        });
+      }
+    } else {
+      const isCircularScan = algoId === 'CSCAN';
+      const isCircularLook = algoId === 'CLOOK';
+      const isScan = algoId === 'SCAN' || isCircularScan;
+
+      function sweep(direction, extraStory = '') {
+        while (true) {
+          const candidates = pending
+            .filter((request) => direction > 0 ? request > current : request < current)
+            .sort(direction > 0 ? byCylinderAsc : (a, b) => b - a);
+          if (!candidates.length) break;
+          const request = candidates[0];
+          const waiting = pending.filter((item) => !candidates.includes(item)).sort(byCylinderAsc);
+          const dirWord = direction > 0 ? 'higher' : 'lower';
+          const selection = {
+            type: 'directional',
+            candidates: [...candidates],
+            waiting,
+            chosen: request,
+            direction,
+            current,
+            note: `The head is sweeping toward ${dirWord} cylinders. Of the requests ahead, ${request} is the next one encountered.`
+          };
+          const story = extraStory || `Continue the sweep toward ${dirWord} cylinders and serve the nearest pending request in that direction: ${request}.`;
+          pushAction({ to: request, kind: 'service', request, selection, story: story + (extraStory ? ` The next request in that direction is ${request}.` : '') });
+          extraStory = '';
+        }
+      }
+
+      // All four sweep policies begin by moving toward higher-numbered cylinders.
+      sweep(1);
+
+      if (algoId === 'SCAN') {
+        if (pending.length) {
+          const waiting = [...pending].sort(byCylinderAsc);
+          const selection = {
+            type: 'edge',
+            candidates: waiting,
+            chosen: null,
+            note: `There are no more requests ahead. SCAN continues to the physical end at cylinder ${PROBLEM.max}; the remaining requests are serviced after the reversal.`
+          };
+          pushAction({
+            to: PROBLEM.max,
+            kind: 'boundary',
+            selection,
+            story: `The upward sweep has no more requests ahead. SCAN travels to the physical boundary, cylinder ${PROBLEM.max}, before reversing.`
+          });
+          sweep(-1, `The head has reached the physical end at ${PROBLEM.max}; SCAN now reverses and services requests while moving lower.`);
+        }
+      } else if (algoId === 'LOOK') {
+        if (pending.length) {
+          const turnAt = current;
+          sweep(-1, `LOOK turns at cylinder ${turnAt}, the last pending request in the upward direction—not at the physical end. It now sweeps lower.`);
+        }
+      } else if (isCircularScan) {
+        if (pending.length) {
+          if (current < PROBLEM.max) {
+            const selection = {
+              type: 'edge',
+              candidates: [...pending].sort(byCylinderAsc),
+              chosen: null,
+              note: `The upward sweep is complete. C-SCAN first reaches the physical edge at ${PROBLEM.max}; then it returns to ${PROBLEM.min} without serving requests on that trip.`
+            };
+            pushAction({
+              to: PROBLEM.max,
+              kind: 'boundary',
+              selection,
+              story: `No more requests remain ahead. C-SCAN continues to the physical edge at ${PROBLEM.max} before its circular return.`
+            });
+          }
+          const selection = {
+            type: 'wrap',
+            candidates: [...pending].sort(byCylinderAsc),
+            chosen: null,
+            note: `The head returns from cylinder ${current} to ${PROBLEM.min}. Requests are not serviced during this return, but its ${absDistance(current, PROBLEM.min)}-cylinder movement is counted.`
+          };
+          pushAction({
+            to: PROBLEM.min,
+            kind: 'wrap',
+            selection,
+            story: `Circular return: move from ${current} to ${PROBLEM.min} without servicing requests. The return movement is included in the total.`
+          });
+          sweep(1, `The head has returned to ${PROBLEM.min}; C-SCAN resumes its upward sweep.`);
+        }
+      } else if (isCircularLook) {
+        if (pending.length) {
+          const candidates = [...pending].sort(byCylinderAsc);
+          const request = candidates[0];
+          const selection = {
+            type: 'wrapService',
+            candidates,
+            chosen: request,
+            current,
+            note: `No requests remain above the head. C-LOOK jumps directly to the lowest pending cylinder (${request}) and serves it on arrival.`
+          };
+          pushAction({
+            to: request,
+            kind: 'wrap',
+            request,
+            selection,
+            story: `C-LOOK jumps from the last request in the upward sweep directly to the lowest pending request, cylinder ${request}, and serves it on arrival. The jump is counted.`
+          });
+          sweep(1, `After the circular jump to ${request}, C-LOOK continues servicing requests toward higher cylinders.`);
+        }
+      }
+    }
+
+    let running = 0;
+    for (const action of actions) {
+      action.delta = absDistance(action.from, action.to);
+      action.before = running;
+      running += action.delta;
+      action.after = running;
+    }
+
+    return { algoId, actions, total: running, requestCount: PROBLEM.queue.length };
+  }
+
+  function renderBrand() {
+    return `<div class="brand-row">
+      <div class="brand-mark" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.2" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2.2" stroke="currentColor" stroke-width="1.5"/><path d="M12 3.8v5.8m8.2 2.4h-5.8M12 20.2v-5.8M3.8 12h5.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></div>
+      <div class="brand-copy"><strong>Systems Lab</strong><span>Operating systems · interactive lesson</span></div>
+    </div>`;
+  }
+
+  function renderWorkload() {
+    return `<section class="panel workload-card" aria-labelledby="workload-title">
+      <div class="workload-top">
+        <div><p class="eyebrow">The same workload for every policy</p><h2 id="workload-title">A moderate seek sequence</h2><p>Ten requests on a 200-cylinder disk make the policy differences easy to see.</p></div>
+        <span class="fixed-badge"><i class="fixed-dot"></i> Fixed question · reusable</span>
+      </div>
+      <div class="workload-facts">
+        <div class="fact"><span class="fact-label">Disk cylinders</span><span class="fact-value">0–199</span><span class="fact-sub">inclusive physical range</span></div>
+        <div class="fact"><span class="fact-label">Starting head</span><span class="fact-value">53</span><span class="fact-sub">initial cylinder position</span></div>
+        <div class="fact"><span class="fact-label">Request queue · arrival order</span><div class="queue-chips">${PROBLEM.queue.map((value, i) => `<span class="queue-chip"><small>${String(i + 1).padStart(2, '0')}</small>${value}</span>`).join('')}</div></div>
+      </div>
+      <p class="workload-note"><span class="info-mark">i</span><span>For SCAN, C-SCAN, LOOK and C-LOOK, the starting direction is <strong>toward higher cylinders</strong>. The return/wrap movement and any trip to a physical edge are included in the head-movement total.</span></p>
+    </section>`;
+  }
+
+  function renderAlgorithmCard(algo, index) {
+    const selected = state.selected === algo.id;
+    return `<button type="button" class="algorithm-card ${selected ? 'selected' : ''}" data-algo="${algo.id}" aria-pressed="${selected}" aria-label="Select ${algo.name}, ${algo.full}">
+      <div class="algo-card-top"><span class="algo-number">POLICY ${String(index + 1).padStart(2, '0')}</span><span class="algo-symbol" aria-hidden="true">${algo.symbol}</span></div>
+      <span class="selection-indicator" aria-hidden="true"></span>
+      <h3>${algo.name}</h3><span class="algo-fullname">${algo.full}</span><p>${algo.short}</p>
+    </button>`;
+  }
+
+  function renderChooser() {
+    const selected = algoById(state.selected);
+    app.innerHTML = `<main class="app-shell">
+      ${renderBrand()}
+      <header class="page-hero"><p class="eyebrow">Disk scheduling · visual walkthrough</p><h1>Follow the head.</h1><p class="hero-copy">Pick a scheduling policy, then walk through every seek one move at a time. Watch the graph grow, inspect each decision, and check the final head-movement calculation.</p></header>
+      ${renderWorkload()}
+      <section aria-labelledby="algorithms-title">
+        <div class="section-heading"><div><p class="eyebrow">Choose a policy</p><h2 id="algorithms-title">Which algorithm should run?</h2><p>All six use the exact same head position and request queue.</p></div><span class="small-note">Select a card to begin</span></div>
+        <div class="algorithm-grid">${ALGORITHMS.map(renderAlgorithmCard).join('')}</div>
+        <div class="selection-row"><div class="selection-hint"><span class="info-mark">i</span><span id="selection-copy"><strong>${selected.name} selected.</strong> ${selected.detail}<br>Use <strong>Next</strong> and <strong>Previous</strong> to move through the explanation.</span></div><button type="button" class="btn btn-primary" id="start-btn">Start ${selected.name} walkthrough <span class="btn-icon" aria-hidden="true">→</span></button></div>
+      </section>
+      <p class="footnote">Learning convention: a seek is measured as |destination − current cylinder|. For circular policies, the jump between ends is counted as physical head movement; only requests actually passed on a sweep are serviced.</p>
+    </main>`;
+  }
+
+  function updateChooserSelection() {
+    const selected = algoById(state.selected);
+    app.querySelectorAll('[data-algo]').forEach((button) => {
+      const isSelected = button.dataset.algo === state.selected;
+      button.classList.toggle('selected', isSelected);
+      button.setAttribute('aria-pressed', String(isSelected));
+    });
+    const copy = document.getElementById('selection-copy');
+    const startButton = document.getElementById('start-btn');
+    if (copy) copy.innerHTML = `<strong>${selected.name} selected.</strong> ${selected.detail}<br>Use <strong>Next</strong> and <strong>Previous</strong> to move through the explanation.`;
+    if (startButton) startButton.innerHTML = `Start ${selected.name} walkthrough <span class="btn-icon" aria-hidden="true">→</span>`;
+  }
+
+  function stepState() {
+    const sim = state.sim;
+    const count = sim.actions.length;
+    const finalStep = count + 1;
+    const step = state.step;
+    const doneCount = Math.min(step, count);
+    const currentAction = step > 0 && step <= count ? sim.actions[step - 1] : null;
+    const currentHead = doneCount === 0 ? PROBLEM.head : sim.actions[doneCount - 1].to;
+    const totalMoved = doneCount === 0 ? 0 : sim.actions[doneCount - 1].after;
+    const served = sim.actions.slice(0, doneCount).filter((action) => action.request !== null).length;
+    const servedSet = new Set(sim.actions.slice(0, doneCount).filter((action) => action.request !== null).map((action) => action.request));
+    const pending = PROBLEM.queue.filter((request) => !servedSet.has(request));
+    const isIntro = step === 0;
+    const isFinal = step === finalStep;
+    const progress = Math.round((step / finalStep) * 100);
+    return { sim, count, finalStep, step, doneCount, currentAction, currentHead, totalMoved, served, pending, isIntro, isFinal, progress };
+  }
+
+  function renderStats(view) {
+    const moveValue = view.currentAction ? fmt(view.currentAction.delta) : (view.isFinal ? '—' : '0');
+    const moveSub = view.currentAction ? `${view.currentAction.from} → ${view.currentAction.to}` : (view.isFinal ? 'walkthrough complete' : 'no move yet');
+    return `<div class="stats-grid" aria-label="Current run statistics">
+      <div class="stat-card"><span class="fact-label">Head position</span><div class="stat-value" id="stat-head">${view.currentHead}<small>cylinder</small></div><div class="stat-sub" id="stat-head-sub">${view.isIntro ? 'starting position' : view.isFinal ? 'final position' : 'after this move'}</div></div>
+      <div class="stat-card"><span class="fact-label">This move</span><div class="stat-value" id="stat-move">${moveValue}<small>${view.currentAction ? 'cylinders' : ''}</small></div><div class="stat-sub" id="stat-move-sub">${moveSub}</div></div>
+      <div class="stat-card"><span class="fact-label">Total movement</span><div class="stat-value" id="stat-total">${fmt(view.totalMoved)}<small>cylinders</small></div><div class="stat-sub">cumulative seek distance</div></div>
+      <div class="stat-card"><span class="fact-label">Requests left</span><div class="stat-value" id="stat-pending">${view.pending.length}<small>of ${PROBLEM.queue.length}</small></div><div class="stat-sub" id="stat-pending-sub">${view.served} serviced so far</div></div>
+    </div>`;
+  }
+
+  function chartCoordinates(index, value, count) {
+    const left = 78, right = 852, top = 28, bottom = 284;
+    const x = count === 0 ? left : left + (index / count) * (right - left);
+    const y = bottom - ((value - PROBLEM.min) / (PROBLEM.max - PROBLEM.min)) * (bottom - top);
+    return { x, y, left, right, top, bottom };
+  }
+
+  function renderGraph(view) {
+    const count = view.count;
+    const ticks = [0, 50, 100, 150, 199];
+    const points = [PROBLEM.head, ...view.sim.actions.map((action) => action.to)];
+    let svg = `<svg class="chart-svg" viewBox="0 0 880 348" role="img" aria-label="Head movement graph. Vertical axis is cylinder number, horizontal axis is move order. 0 of ${count} moves are drawn."><title>Disk head movement graph</title><desc>The route appears one completed movement at a time. The starting head is at cylinder 53.</desc>`;
+
+    for (const tick of ticks) {
+      const { y, left, right } = chartCoordinates(0, tick, count);
+      svg += `<line class="chart-grid" x1="${left}" y1="${y}" x2="${right}" y2="${y}"/><text class="chart-tick" x="66" y="${y + 3.5}" text-anchor="end">${tick}</text>`;
+    }
+    const coords = points.map((value, index) => chartCoordinates(index, value, count));
+    const plot = chartCoordinates(0, 0, count);
+    svg += `<line class="chart-axis" x1="${plot.left}" y1="${plot.top}" x2="${plot.left}" y2="${plot.bottom}"/><line class="chart-axis" x1="${plot.left}" y1="${plot.bottom}" x2="${plot.right}" y2="${plot.bottom}"/>`;
+    svg += `<text class="chart-axis-title" transform="translate(16 168) rotate(-90)" text-anchor="middle">CYLINDER</text>`;
+
+    // Build the complete, fixed chart once. Later steps only toggle these SVG nodes,
+    // so the chart itself never gets torn down or causes a layout flash.
+    for (let index = 0; index <= count; index++) {
+      const x = coords[index].x;
+      svg += `<line class="chart-grid" x1="${x}" y1="${plot.bottom}" x2="${x}" y2="${plot.bottom + 4}"/><text class="chart-order-tick" x="${x}" y="${plot.bottom + 16}" text-anchor="middle">${index}</text>`;
+    }
+    svg += `<text class="chart-axis-title" x="${(plot.left + plot.right) / 2}" y="${plot.bottom + 34}" text-anchor="middle">MOVE ORDER</text>`;
+
+    for (let index = 0; index < count; index++) {
+      const action = view.sim.actions[index];
+      const from = coords[index];
+      const to = coords[index + 1];
+      const isVisible = index < view.doneCount;
+      const isCurrent = !view.isFinal && index === view.doneCount - 1;
+      const segmentType = action.kind === 'boundary' ? 'segment-boundary' : action.kind === 'wrap' ? 'segment-wrap' : 'segment-service';
+      svg += `<path data-route-segment="${index}" class="route-segment ${segmentType}${isCurrent ? ' segment-current' : ''}" d="M ${from.x} ${from.y} L ${to.x} ${to.y}" stroke-width="${isCurrent ? 4 : 2.8}" style="${isVisible ? '' : 'display:none'}"/>`;
+    }
+
+    for (let index = 0; index <= count; index++) {
+      const point = coords[index];
+      const action = index > 0 ? view.sim.actions[index - 1] : null;
+      const isStart = index === 0;
+      const isVisible = index <= view.doneCount;
+      const isCurrent = !view.isFinal && index === view.doneCount && !view.isIntro;
+      const pointClass = isStart ? 'point-start' : action.kind === 'boundary' ? 'point-boundary' : action.kind === 'wrap' ? 'point-wrap' : 'point-service';
+      const radius = isCurrent ? 6.3 : isStart ? 5.7 : 4.8;
+      svg += `<circle data-route-point="${index}" class="chart-point ${pointClass}${isCurrent ? ' point-current' : ''}" cx="${point.x}" cy="${point.y}" r="${radius}" style="${isVisible ? '' : 'display:none'}"/>`;
+      const value = points[index];
+      let labelY;
+      if (point.y < 53) labelY = point.y + 19;
+      else if (point.y > 261) labelY = point.y - 12;
+      else labelY = index % 2 === 0 ? point.y - 11 : point.y + 18;
+      const labelX = Math.max(82, Math.min(848, point.x));
+      svg += `<text data-route-label="${index}" class="chart-value" x="${labelX}" y="${labelY}" text-anchor="middle" style="${isVisible ? '' : 'display:none'}">${value}</text>`;
+      if (isStart) svg += `<text class="chart-start-label" x="${labelX}" y="${labelY + 11}" text-anchor="middle">START</text>`;
+    }
+    svg += `<text class="chart-empty" data-chart-empty="true" x="465" y="158" text-anchor="middle" style="${view.isIntro ? '' : 'display:none'}">Press Next to draw the first seek</text>`;
+    svg += `</svg>`;
+    return svg;
+  }
+
+  function updateGraph(view) {
+    const svg = document.querySelector('#graph-container .chart-svg');
+    if (!svg) return;
+    svg.setAttribute('aria-label', `Head movement graph. Vertical axis is cylinder number, horizontal axis is move order. ${view.doneCount} of ${view.count} moves are drawn.`);
+    svg.querySelectorAll('[data-route-segment]').forEach((segment) => {
+      const index = Number(segment.dataset.routeSegment);
+      const visible = index < view.doneCount;
+      const isCurrent = visible && !view.isFinal && index === view.doneCount - 1;
+      segment.style.display = visible ? '' : 'none';
+      segment.classList.toggle('segment-current', isCurrent);
+      segment.setAttribute('stroke-width', isCurrent ? '4' : '2.8');
+    });
+    svg.querySelectorAll('[data-route-point]').forEach((point) => {
+      const index = Number(point.dataset.routePoint);
+      const visible = index <= view.doneCount;
+      const isCurrent = visible && !view.isFinal && index === view.doneCount && !view.isIntro;
+      point.style.display = visible ? '' : 'none';
+      point.classList.toggle('point-current', isCurrent);
+      point.setAttribute('r', isCurrent ? '6.3' : index === 0 ? '5.7' : '4.8');
+    });
+    svg.querySelectorAll('[data-route-label]').forEach((label) => {
+      label.style.display = Number(label.dataset.routeLabel) <= view.doneCount ? '' : 'none';
+    });
+    const emptyNote = svg.querySelector('[data-chart-empty]');
+    if (emptyNote) emptyNote.style.display = view.isIntro ? '' : 'none';
+  }
+
+  function renderLegend() {
+    return `<div class="graph-legend" aria-label="Graph legend"><span class="legend-item"><i class="legend-dot"></i>Starting head / request</span><span class="legend-item"><i class="legend-line"></i>Servicing a request</span><span class="legend-item"><i class="legend-line boundary"></i>Physical edge</span><span class="legend-item"><i class="legend-line wrap"></i>Circular jump / return</span></div>`;
+  }
+
+  function renderDistanceTable(candidates, chosen) {
+    return `<div class="distance-table-wrap"><table class="distance-table"><thead><tr><th>Pending request</th><th>Seek from head</th><th></th></tr></thead><tbody>${candidates.map((candidate) => {
+      const request = typeof candidate === 'number' ? candidate : candidate.request;
+      const distance = typeof candidate === 'number' ? null : candidate.distance;
+      const isChosen = request === chosen;
+      return `<tr class="${isChosen ? 'is-chosen' : ''}"><td>${request}</td><td>${distance === null ? '—' : `${fmt(distance)} cyl`}</td><td>${isChosen ? '<span class="chosen-mark">CHOOSE</span>' : ''}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+  }
+
+  function renderChips(items, chosen, label) {
+    if (!items || !items.length) return `<p class="decision-copy">No pending requests in this group.</p>`;
+    return `<div class="${label ? 'sub-list-label' : 'sr-only'}">${label || ''}</div><div class="choice-chip-list">${items.map((item) => {
+      const value = typeof item === 'number' ? item : item.request;
+      const distance = typeof item === 'number' ? null : item.distance;
+      const active = value === chosen;
+      return `<span class="decision-chip ${active ? 'chosen' : ''}">${value}${distance !== null ? `<small>${fmt(distance)} away</small>` : ''}${active ? '<small>selected</small>' : ''}</span>`;
+    }).join('')}</div>`;
+  }
+
+  function renderDecision(action) {
+    const selection = action.selection;
+    if (!selection) return '';
+    let title = 'Selection check';
+    let body = selection.note || '';
+    let content = '';
+    if (selection.type === 'fcfs') {
+      title = 'Arrival-order check';
+      content = renderChips(selection.candidates, selection.chosen, `Remaining queue · request ${selection.position} of ${selection.total} is next`);
+    } else if (selection.type === 'sstf') {
+      title = 'Compare remaining distances';
+      content = renderDistanceTable(selection.candidates, selection.chosen);
+    } else if (selection.type === 'directional') {
+      title = 'Requests in this sweep';
+      content = renderChips(selection.candidates, selection.chosen, selection.direction > 0 ? 'Ahead · lower cylinder numbers wait for the return' : 'Ahead while moving lower');
+      if (selection.waiting.length) content += renderChips(selection.waiting, null, 'Waiting on the other side');
+    } else if (selection.type === 'edge') {
+      title = 'Why travel to the edge?';
+      content = renderChips(selection.candidates, null, 'Requests still waiting');
+    } else if (selection.type === 'wrap') {
+      title = 'Circular return';
+      content = renderChips(selection.candidates, null, 'Requests remain pending during the return');
+    } else if (selection.type === 'wrapService') {
+      title = 'Circular LOOK selection';
+      content = renderChips(selection.candidates, selection.chosen, 'Lowest pending request · served on arrival');
+    }
+    return `<div class="decision-box"><div class="decision-title">${title}<small>the rule in action</small></div><p class="decision-copy">${body}</p>${content}</div>`;
+  }
+
+  function renderMath(action) {
+    return `<div class="math-card" aria-label="Seek distance calculation">
+      <div class="math-row"><span class="math-label">Seek this move</span><span class="math-value">|${action.to} − ${action.from}| = <strong>${fmt(action.delta)}</strong> cyl</span></div>
+      <div class="math-row"><span class="math-label">Total so far</span><span class="math-value">${fmt(action.before)} + ${fmt(action.delta)} = <strong>${fmt(action.after)}</strong></span></div>
+      <p class="math-note">Every segment shown on the graph is included in the running total—including a boundary trip or circular return.</p>
+    </div>`;
+  }
+
+  function actionPresentation(action) {
+    if (action.kind === 'boundary') return { tag: 'Physical boundary', className: 'boundary', heading: `Reach cylinder ${action.to}`, symbol: 'EDGE' };
+    if (action.kind === 'wrap' && action.request !== null) return { tag: 'Circular jump + service', className: 'wrap', heading: `Jump to ${action.request} and serve it`, symbol: 'WRAP' };
+    if (action.kind === 'wrap') return { tag: 'Circular return · no service', className: 'wrap', heading: `${action.from} → ${action.to}`, symbol: 'WRAP' };
+    return { tag: 'Request serviced', className: '', heading: `Cylinder ${action.request} served`, symbol: 'SEEK' };
+  }
+
+  function renderIntro(view) {
+    const algo = algoById(view.sim.algoId);
+    const next = view.sim.actions[0];
+    return `<span class="event-label">Walkthrough setup</span>
+      <h2>Start at cylinder ${PROBLEM.head}.</h2>
+      <p class="explain-lead">This run uses <strong>${algo.name}</strong>. Each step completes one movement; the graph and totals update as the head moves.</p>
+      <div class="decision-box"><div class="decision-title">Pending request queue<small>arrival order</small></div><div class="intro-queue">${PROBLEM.queue.map((request, index) => `<span class="queue-chip"><small>${String(index + 1).padStart(2, '0')}</small>${request}</span>`).join('')}</div></div>
+      <div class="intro-next"><strong>Next move:</strong> ${next.kind === 'service' ? `move from ${next.from} to ${next.to} and service request ${next.request}` : next.story}</div>
+      <div class="rule-note"><span class="info-mark">i</span><span>${algo.detail} Distance is calculated as <strong>|destination − current head|</strong>.</span></div>`;
+  }
+
+  function renderActionPanel(action, view) {
+    const presentation = actionPresentation(action);
+    return `<span class="event-label ${presentation.className}"><span aria-hidden="true">${presentation.symbol}</span>${presentation.tag}</span>
+      <h2>${presentation.heading}</h2>
+      <p class="explain-lead">${action.story}</p>
+      ${renderMath(action)}
+      ${renderDecision(action)}
+      <div class="rule-note"><span class="info-mark">i</span><span>Use <strong>Previous</strong> to revisit the selection, or <strong>Next</strong> to calculate the next move.</span></div>`;
+  }
+
+  function renderFinal(view) {
+    const actions = view.sim.actions;
+    const serviceOrder = actions.filter((action) => action.request !== null).map((action) => action.request);
+    const terms = actions.map((action) => fmt(action.delta));
+    const algo = algoById(view.sim.algoId);
+    const average = view.sim.total / PROBLEM.queue.length;
+    return `<span class="event-label complete"><span aria-hidden="true">✓</span>Walkthrough complete</span>
+      <h2>All ${PROBLEM.queue.length} requests serviced.</h2>
+      <p class="explain-lead">That is the final result for <strong>${algo.name}</strong> on this workload.</p>
+      <div class="result-total"><span class="fact-label">Total head movement</span><div class="result-number">${fmt(view.sim.total)}<small>cylinders</small></div><div class="result-average">Average: ${fmt(view.sim.total)} ÷ ${PROBLEM.queue.length} = ${Number(average.toFixed(1))} cylinders per request</div></div>
+      <div class="formula-box"><span class="fact-label">Movement check · sum of each leg</span><div class="formula-text">${terms.join(' + ')} = <strong>${fmt(view.sim.total)}</strong></div></div>
+      <div class="result-order"><span class="fact-label">Service order</span><div class="order-sequence">${serviceOrder.join(' → ')}</div></div>
+      <p class="result-note">Boundary and wrap travel are part of the sum above. A C-LOOK jump also services its destination request on arrival.</p>
+      <div class="result-buttons"><button type="button" class="btn btn-primary" data-action="replay">↺ Replay this ${algo.name} run</button><button type="button" class="btn btn-secondary" data-action="choose">Choose another algorithm</button></div>`;
+  }
+
+  function renderRun() {
+    const view = stepState();
+    const algo = algoById(view.sim.algoId);
+    const onLastMove = view.step === view.count;
+    const status = view.isIntro ? 'OVERVIEW' : view.isFinal ? 'RESULTS' : `MOVE ${view.step} OF ${view.count}`;
+    const nextText = view.isIntro ? 'Begin first move' : onLastMove ? 'See final results' : 'Next move';
+    const rightPanel = view.isIntro ? renderIntro(view) : view.isFinal ? renderFinal(view) : renderActionPanel(view.currentAction, view);
+    app.innerHTML = `<main class="app-shell">
+      ${renderBrand()}
+      <header class="run-heading">
+        <div><div class="run-algo-tag"><span>●</span> Active policy · ${algo.full}</div><h1>${algo.name} walkthrough</h1><p class="hero-copy">${algo.detail} Step through the movement and calculation below.</p></div>
+        <div class="run-actions"><button type="button" class="btn btn-secondary" data-action="choose">← Algorithms</button><button type="button" class="btn btn-quiet" data-action="reset">↺ Reset</button></div>
+      </header>
+      <section class="step-bar" aria-label="Walkthrough controls">
+        <div class="progress-side"><div class="progress-copy"><strong id="run-status">${status}</strong><span id="progress-text">${view.progress}% complete</span></div><div class="progress-track" id="run-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${view.progress}" aria-label="Walkthrough progress"><div class="progress-fill" id="progress-fill" style="width:${view.progress}%"></div></div></div>
+        <div class="step-buttons"><button type="button" class="btn btn-secondary" id="prev-btn" data-action="prev" ${view.isIntro ? 'disabled' : ''}><span aria-hidden="true">←</span> Previous</button><button type="button" class="btn btn-primary" id="next-btn" data-action="next" ${view.isFinal ? 'disabled' : ''}>${nextText} <span class="btn-icon" aria-hidden="true">→</span></button></div>
+      </section>
+      ${renderStats(view)}
+      <div class="run-grid">
+        <section class="panel graph-panel" aria-labelledby="graph-title"><div class="graph-head"><div><h2 id="graph-title">Head movement graph</h2><p>Y-axis: cylinder number · X-axis: move order · route reveals one step at a time</p></div><span class="graph-scale">${PROBLEM.min}–${PROBLEM.max} cylinders</span></div><div class="chart-wrap" id="graph-container">${renderGraph(view)}</div>${renderLegend()}</section>
+        <aside class="panel explain-panel" id="explain-panel" aria-label="Step explanation and calculation">${rightPanel}</aside>
+      </div>
+      <div class="run-foot"><span>Problem: cylinders ${PROBLEM.min}–${PROBLEM.max} · start ${PROBLEM.head} · ${PROBLEM.queue.length} requests</span><span class="key-hint">Keyboard: <span class="keycap">←</span> previous <span class="keycap">→</span> next</span></div>
+    </main>`;
+  }
+
+  // Keep the page shell and navigation controls mounted while stepping. Only the
+  // changing graph, figures and explanation are patched, avoiding a full-screen
+  // fade/reflow and preserving keyboard focus on Next/Previous.
+  function updateRunView() {
+    if (state.mode !== 'run' || !state.sim) return;
+    const view = stepState();
+    const status = view.isIntro ? 'OVERVIEW' : view.isFinal ? 'RESULTS' : `MOVE ${view.step} OF ${view.count}`;
+    const nextText = view.isIntro ? 'Begin first move' : view.step === view.count ? 'See final results' : 'Next move';
+    const currentAction = view.currentAction;
+    const moveValue = currentAction ? fmt(currentAction.delta) : (view.isFinal ? '—' : '0');
+    const moveSub = currentAction ? `${currentAction.from} → ${currentAction.to}` : (view.isFinal ? 'walkthrough complete' : 'no move yet');
+    const headSub = view.isIntro ? 'starting position' : view.isFinal ? 'final position' : 'after this move';
+    const statusNode = document.getElementById('run-status');
+    const progressText = document.getElementById('progress-text');
+    const progress = document.getElementById('run-progress');
+    const progressFill = document.getElementById('progress-fill');
+    const graph = document.getElementById('graph-container');
+    const explanation = document.getElementById('explain-panel');
+    const previousButton = document.getElementById('prev-btn');
+    const nextButton = document.getElementById('next-btn');
+
+    if (!statusNode || !graph || !explanation || !previousButton || !nextButton) return;
+    statusNode.textContent = status;
+    progressText.textContent = `${view.progress}% complete`;
+    progress.setAttribute('aria-valuenow', String(view.progress));
+    progressFill.style.width = `${view.progress}%`;
+    document.getElementById('stat-head').innerHTML = `${view.currentHead}<small>cylinder</small>`;
+    document.getElementById('stat-head-sub').textContent = headSub;
+    document.getElementById('stat-move').innerHTML = `${moveValue}<small>${currentAction ? 'cylinders' : ''}</small>`;
+    document.getElementById('stat-move-sub').textContent = moveSub;
+    document.getElementById('stat-total').innerHTML = `${fmt(view.totalMoved)}<small>cylinders</small>`;
+    document.getElementById('stat-pending').innerHTML = `${view.pending.length}<small>of ${PROBLEM.queue.length}</small>`;
+    document.getElementById('stat-pending-sub').textContent = `${view.served} serviced so far`;
+    updateGraph(view);
+    const explanationScrollTop = explanation.scrollTop;
+    explanation.innerHTML = view.isIntro ? renderIntro(view) : view.isFinal ? renderFinal(view) : renderActionPanel(currentAction, view);
+    explanation.scrollTop = explanationScrollTop;
+    previousButton.disabled = view.isIntro;
+    nextButton.disabled = view.isFinal;
+    nextButton.innerHTML = `${nextText} <span class="btn-icon" aria-hidden="true">→</span>`;
+  }
+
+  function render() {
+    if (state.mode === 'select') renderChooser();
+    else renderRun();
+  }
+
+  function startRun() {
+    state.sim = simulate(state.selected);
+    state.step = 0;
+    state.mode = 'run';
+    render();
+  }
+
+  function handleAction(action) {
+    if (action === 'next' && state.sim) {
+      const finalStep = state.sim.actions.length + 1;
+      state.step = Math.min(finalStep, state.step + 1);
+      updateRunView();
+    } else if (action === 'prev' && state.sim) {
+      state.step = Math.max(0, state.step - 1);
+      updateRunView();
+    } else if (action === 'reset' && state.sim) {
+      state.step = 0;
+      updateRunView();
+    } else if (action === 'choose') {
+      state.mode = 'select';
+      render();
+    } else if (action === 'replay' && state.sim) {
+      state.step = 0;
+      updateRunView();
+    }
+  }
+
+  document.addEventListener('click', (event) => {
+    const algoButton = event.target.closest('[data-algo]');
+    if (algoButton) {
+      state.selected = algoButton.dataset.algo;
+      updateChooserSelection();
+      return;
+    }
+    if (event.target.closest('#start-btn')) {
+      startRun();
+      return;
+    }
+    const actionButton = event.target.closest('[data-action]');
+    if (actionButton && !actionButton.disabled) handleAction(actionButton.dataset.action);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (state.mode !== 'run' || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.target.closest('button, input, textarea, select, [contenteditable="true"]')) return;
+    if (event.key === 'ArrowRight') { event.preventDefault(); handleAction('next'); }
+    if (event.key === 'ArrowLeft') { event.preventDefault(); handleAction('prev'); }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
